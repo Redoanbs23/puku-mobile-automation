@@ -32,3 +32,7 @@ build/
 
 # Claude local settings (keep shared config, ignore local overrides)
 .claude/settings.local.json
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml
+_bmad/render/
