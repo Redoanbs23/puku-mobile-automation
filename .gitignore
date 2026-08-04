@@ -10,9 +10,11 @@ apk/
 # Environment & secrets
 .env
 .env.*
+!.env.example
 
 # Reports & test artifacts
 reports/
+test-results/
 allure-results/
 allure-report/
 *.log
