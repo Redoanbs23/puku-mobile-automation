@@ -4,7 +4,7 @@ import { onTestStart, onTestFailure } from '../src/hooks/failure-capture.js';
 
 export const sharedConfig: Partial<Options.Testrunner> = {
   runner: 'local',
-  specs: ['../tests/specs/**/*.spec.ts'],
+  specs: ['./tests/specs/**/*.spec.ts'],
   maxInstances: 1,
   logLevel: 'info',
   waitforTimeout: 10000,

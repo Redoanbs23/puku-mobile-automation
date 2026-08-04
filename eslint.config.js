@@ -15,6 +15,13 @@ export default [
         driver: 'readonly',
         $: 'readonly',
         $$: 'readonly',
+        expect: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        before: 'readonly',
+        beforeEach: 'readonly',
+        after: 'readonly',
+        afterEach: 'readonly',
       },
     },
     plugins: {
@@ -27,6 +34,18 @@ export default [
   },
   prettier,
   {
-    ignores: ['node_modules', 'test-results', 'allure-report', 'allure-results', 'dist'],
+    ignores: [
+      'node_modules',
+      'test-results',
+      'allure-report',
+      'allure-results',
+      'dist',
+      '.claude',
+      '.bmad-loop',
+      '_bmad',
+      '_bmad-output',
+      'design-artifacts',
+      'apk',
+    ],
   },
 ];

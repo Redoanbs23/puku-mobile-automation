@@ -1,12 +1,16 @@
 import { BaseScreen } from './base.screen.js';
 
 /**
- * TODO: the content-desc values below are placeholders based on manual
- * exploration notes (docs/00-apk-reconnaissance.md) — confirm the exact
- * strings against a fresh Appium Inspector session before relying on them
- * in real specs.
+ * content-desc values below confirmed via a live `adb shell uiautomator
+ * dump` against the running emulator on 2026-08-04 (see
+ * docs/00-apk-reconnaissance.md, which only documented these in prose —
+ * flagged as a doc gap to fix separately).
  */
 class LoginScreen extends BaseScreen {
+  get titleElement(): ChainablePromiseElement {
+    return this.byContentDesc('Puku Editor');
+  }
+
   get continueWithGoogleButton(): ChainablePromiseElement {
     return this.byContentDesc('Continue with Google');
   }

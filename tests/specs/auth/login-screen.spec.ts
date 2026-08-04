@@ -1,3 +1,5 @@
+import { loginScreen } from '../../../src/screens/login.screen.js';
+
 /**
  * P0/P1 scenarios from test-design-epic-auth-login.md's coverage matrix.
  * Stubs only — implementation comes via the ATDD/automate workflow, not
@@ -5,7 +7,13 @@
  * traceability and grep-based execution (npm run test:p0 / test:p1).
  */
 describe('Login screen — P0/P1', () => {
-  it.skip('LOGIN-E2E-002 @p0: app launches, login screen renders without crash', async () => {});
+  it('LOGIN-E2E-002 @p0: app launches, login screen renders without crash', async () => {
+    await loginScreen.waitUntilDisplayed();
+    // Title's content-desc is a clean single value (confirmed via live
+    // uiautomator dump); the Google button is an ImageView and less stable
+    // as render-proof, so the title is the chosen "known element" signal.
+    await expect(loginScreen.titleElement).toBeDisplayed();
+  });
 
   it.skip('LOGIN-E2E-005 @p0: both auth entry points render on the login screen', async () => {});
 
