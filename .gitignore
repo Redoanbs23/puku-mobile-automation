@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# App binaries - never commit
+apk/
+*.apk
+*.aab
+*.ipa
+
+# Environment & secrets
+.env
+.env.*
+
+# Reports & test artifacts
+reports/
+allure-results/
+allure-report/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.iml
+
+# TypeScript build output
+dist/
+build/
+*.tsbuildinfo
+
+# Claude local settings (keep shared config, ignore local overrides)
+.claude/settings.local.json
