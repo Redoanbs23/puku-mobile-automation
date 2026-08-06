@@ -18,7 +18,7 @@ import { settingsScreen } from '../../../src/screens/settings.screen.js';
  * point tied to this device's screen size/DPI.
  */
 describe('Log out flow — device-dependent', () => {
-  it('AUTH-E2E-016: logging out via Settings redirects to the login screen', async function () {
+  it('AUTH-E2E-016 @p0: logging out via Settings redirects to the login screen', async function () {
     if (!process.env.DEVICE_UDID) {
       this.skip();
     }

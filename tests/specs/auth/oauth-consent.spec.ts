@@ -22,7 +22,7 @@ import { homeScreen } from '../../../src/screens/home.screen.js';
  * scope, and the named risks this test depends on.
  */
 describe('OAuth consent tap flow — device-dependent', () => {
-  it('AUTH-E2E-015: tapping Authorize on the consent screen logs in to PUKU', async function () {
+  it('AUTH-E2E-015 @p0: tapping Authorize on the consent screen logs in to PUKU', async function () {
     if (!process.env.DEVICE_UDID) {
       this.skip();
     }

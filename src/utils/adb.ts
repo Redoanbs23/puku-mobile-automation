@@ -4,7 +4,7 @@ import { execSync, spawn, type ChildProcess } from 'node:child_process';
 // command fails with "more than one device/emulator" as soon as more than
 // one device/emulator is attached — exactly the setup this project runs
 // under (physical device + emulator both connected).
-function deviceArgs(): string[] {
+export function deviceArgs(): string[] {
   const udid = process.env.DEVICE_UDID;
   return udid ? ['-s', udid] : [];
 }
