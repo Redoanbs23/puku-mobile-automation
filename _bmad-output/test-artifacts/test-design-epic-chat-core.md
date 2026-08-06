@@ -23,17 +23,17 @@ This epic is only reachable at all because `auth-login`'s `AUTH-E2E-015` now pro
 
 **Risk Summary:**
 
-- Total risks identified this epic: 7 new (R8–R14), plus 6 inherited and still active from `auth-login` (R2, R3, R4, R5, R6, R7)
-- High-priority risks (≥6) this epic: 4 new (R8, R9, R10, R11) + 3 inherited (R2, R3, R6)
-- Critical categories: TECH (5 of 7 new risks), OPS/BUS and DATA/OPS (1 each), SEC (1)
+- Total risks identified this epic: 8 new (R8–R15), plus 6 inherited and still active from `auth-login` (R2, R3, R4, R5, R6, R7)
+- High-priority risks (≥6) this epic: 5 new (R8, R9, R10, R11, R15) + 3 inherited (R2, R3, R6)
+- Critical categories: TECH (5 of 8 new risks — R9, R11, R12, R13, R15), OPS (2 — R8, R10), DATA (2 — R10, R15), BUS (1 — R8), SEC (1 — R14). *Corrected from the original "TECH (5 of 7)" line, which undercounted against the 7-risk baseline it described — recomputed cleanly now that R15 is added.*
 - **New risk class not present in `auth-login`:** this is the first epic testing a *live AI feature* rather than static UI — real inference cost/ToS exposure, non-deterministic output, and persistent side effects on a shared account are all new to this project
 
 **Coverage Summary:**
 
-- P0 scenarios: 3 (~5–10 hours)
+- P0 scenarios: 4 (~7–14 hours)
 - P1 scenarios: 7 (~10–18 hours)
 - P2/P3 scenarios: 8 (~8–17 hours)
-- **Total effort**: ~23–45 hours (~3–6 days) — test-authoring only, excludes the dedicated exploration passes R13 requires for Projects/Artifacts/Code
+- **Total effort**: ~25–49 hours (~3–6 days) — test-authoring only, excludes the dedicated exploration passes R13 requires for Projects/Artifacts/Code
 
 ---
 
@@ -72,8 +72,10 @@ This epic is only reachable at all because `auth-login`'s `AUTH-E2E-015` now pro
 | R9 | TECH | AI response content is non-deterministic — asserting on exact response text is inherently flaky | 3 | 2 | 6 | Assert structural/behavioral signals only (response bubble renders, input clears, no crash) — never exact AI-generated text, same philosophy as R2's "verify redirect, not content" | Redoan | Before first message-send test is written |
 | R10 | DATA/OPS | Test-generated messages persist indefinitely in the real, shared account's chat history — no known cleanup mechanism; risks polluting/confusing future Chats-history assertions | 3 | 2 | 6 | Consistent, recognizable test-message naming convention; investigate whether chat deletion exists before scaling up message-send coverage | Redoan | Before chat-history-list scenarios are written |
 | R11 | TECH | Voice/audio input (Settings → Voice, mic icon on home) is not practically automatable — no reliable way to inject fake mic audio via Appium/UiAutomator2 | 3 | 2 | 6 | Same treatment as R2: permanent manual/exploratory-only lane, documented as an accepted limitation, not a coverage gap | Redoan | Ongoing / permanent |
+| R15 | TECH/DATA | In-progress conversation state may not survive app backgrounding/restart — `AUTH-E2E-015`'s `noReset:true` only ever proved login-session persistence, never conversation/message persistence within a session | 2 | 3 | 6 | Add `CHAT-E2E-019` (P0): send a message, background/resume the app, confirm the conversation is still present | Redoan | Before `CHAT-E2E-019` is authored |
 
 *R8: scored 2×3=6 (HIGH/MITIGATE band), not 9 — probability set to "Possible" (2) rather than "Likely" (3) since it's unconfirmed whether PUKU actively detects/rate-limits automated usage; impact set to "Critical" (3) because the worst case (account suspension) would block both epics on a shared account.
+*R15: probability set to "Possible" (2), not "Likely" (3) — whether PUKU actually loses conversation state on backgrounding is unconfirmed, not assumed broken without evidence, same epistemic stance used for R8. Impact set to "Critical" (3) because silent loss of an in-progress conversation is a trust-destroying failure for a chat product specifically, not a cosmetic bug.
 
 ### Medium-Priority Risks (Score 3-4) — New This Epic
 
@@ -143,8 +145,9 @@ None identified at this scope — all newly registered risks scored ≥4, consis
 | CHAT-E2E-001 | Home screen renders post-login without crash (chat prompt heading, chat input, model selector all visible) | E2E (Mobile) | — | Foundational; blocks everything else in this epic if it fails, same role `LOGIN-E2E-002` played |
 | CHAT-E2E-002 | Sending a message produces a visible response (structural: response bubble renders, input clears) | E2E (Mobile) | R8, R9 | Asserts structure only, never exact AI text. Single minimal-content send — see Execution Strategy |
 | CHAT-E2E-003 | Hamburger menu opens; drawer shows all expected entries (Chats, Projects, Artifacts, Code, New chat, Settings) | E2E (Mobile) | R4 | Gateway to the rest of this epic's scope |
+| CHAT-E2E-019 | Send a message, background the app (`driver.background()`) and resume, confirm the conversation is still present | E2E (Mobile) | R15 | New gap, added 2026-08-06 — `AUTH-E2E-015`'s `noReset:true` only ever proved login-session persistence, never conversation persistence. Scoped to the single most common real-world interruption (backgrounding); a full process-kill/restart variant is a candidate follow-on, not this scenario's scope |
 
-**Total P0**: 3 tests, ~5–10 hours
+**Total P0**: 4 tests, ~7–14 hours
 
 ### P1 (High)
 
@@ -156,7 +159,7 @@ None identified at this scope — all newly registered risks scored ≥4, consis
 | CHAT-E2E-005 | Switching model doesn't crash the app; selection persists for the session | E2E (Mobile) | R12, NFR-Reliability | |
 | CHAT-E2E-006 | "New chat" from drawer starts a fresh session (chat-prompt state resets) | E2E (Mobile) | — | Frequently used |
 | CHAT-E2E-007 | Empty message cannot be sent (send control disabled/no-op) | E2E (Mobile) | — | Cheap edge case — does not trigger a real send, no R8 exposure |
-| CHAT-E2E-008 | Network dropped mid-message-send → graceful error, no crash | E2E (Mobile) | R9, R8, NFR-Reliability | Mirrors `LOGIN-E2E-011`'s pattern. Cost-triggering (R8) |
+| CHAT-E2E-008 | Network dropped mid-message-send → graceful error, no crash | E2E (Mobile) | R9, R8, NFR-Reliability | Mirrors `LOGIN-E2E-011`'s pattern. Cost-triggering (R8). Priority pending evidence — requires one careful, R8-mindful manual observation of the actual failure mode (graceful error vs. crash/hang) before this can be responsibly assessed |
 | CHAT-E2E-009 | "Chats" drawer entry opens; history list renders without crash | E2E (Mobile) | R10 | Structural only; foundational for later detecting R10 pollution |
 | CHAT-E2E-010 | Settings toggles (Haptic feedback, Notifications) can be toggled without crash; state visibly reflects the tap | E2E (Mobile) | — | Extends `settings.screen.ts`, not yet automated for these two toggles |
 
@@ -212,11 +215,11 @@ Philosophy carried forward from `auth-login`: run everything in PR if it fits co
 
 | Priority | Count | Estimated Hours | Notes |
 |----------|-------|------------------|-------|
-| P0 | 3 | ~5–10 | New locator work for drawer/home exceeds `auth-login`'s already-mapped login screen |
+| P0 | 4 | ~7–14 | New locator work for drawer/home exceeds `auth-login`'s already-mapped login screen; `CHAT-E2E-019` (added 2026-08-06) needs a new backgrounding/resume interaction on top of that |
 | P1 | 7 | ~10–18 | Broadest tier — model switching, history, Settings toggles |
 | P2 | 5 | ~6–12 | Three of five are pure smoke tests, cheap but exploration-gated (R13) |
 | P3 | 3 | ~2–5 | |
-| **Total** | **18** | **~23–45** | **~3–6 days** |
+| **Total** | **19** | **~25–49** | **~3–6 days** |
 
 ### Prerequisites
 
@@ -297,6 +300,15 @@ Philosophy carried forward from `auth-login`: run everything in PR if it fits co
 **Status:** Planned
 **Verification:** README/test-design documents the limitation; CHAT-E2E-018 stays tagged manual-only, never converted to an automated attempt
 **Residual Risk:** None beyond the accepted coverage gap itself — voice/audio simply stays untested by automation, same permanent trade-off already accepted for R2 (Google OAuth completion). Not expected to change unless Appium/UiAutomator2 gains audio-injection support.
+
+### R15: In-progress conversation may not survive app backgrounding/restart (Score: 6)
+
+**Mitigation Strategy:** 1) Add `CHAT-E2E-019` as a P0 scenario: send a message, background the app, resume it, and confirm the conversation is still present. 2) If it fails, treat as a confirmed defect and escalate — unlike R11/R2-style automation-tooling limitations, this isn't something the test suite can work around by design; it would be a real product bug. 3) No mitigation is possible before the scenario runs at least once — this risk starts as an open question, not a known, already-accepted limitation.
+**Owner:** Redoan
+**Timeline:** Before `CHAT-E2E-019` is authored
+**Status:** Planned
+**Verification:** `CHAT-E2E-019` passes consistently across repeated backgrounding/resume cycles
+**Residual Risk:** `CHAT-E2E-019` as scoped tests one specific interruption mechanism (backgrounding via `driver.background()`) — if PUKU's persistence behaves inconsistently across interruption types (e.g. survives backgrounding but not a full process kill/force-stop, or vice versa), this scenario alone won't catch every variant. A process-kill/restart variant remains a candidate follow-on scenario, not yet in scope.
 
 ---
 
