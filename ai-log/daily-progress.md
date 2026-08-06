@@ -126,3 +126,48 @@ Completed the `chat-core` epic's Test Design with Murat (`bmad-testarch-test-des
 1. A dedicated Appium Inspector exploration pass for Projects, Artifacts, and Code (`R13`) before attempting to automate any of them beyond smoke level.
 2. Investigate whether PUKU exposes a chat-deletion capability (`R10`) before scaling up message-send coverage further.
 3. Scaffold the remaining `chat-core` P1–P3 scenarios (`CHAT-E2E-004` through `018`) per `test-design-epic-chat-core.md`'s coverage plan.
+
+---
+
+## 2026-08-06 (session 2)
+
+### Session Summary
+
+CI strategy assessment with Murat (self-hosted physical-device runner rejected on risk grounds), an emulator-vs-physical-device behavioral comparison that produced a genuinely surprising result, a real device-targeting bug found and fixed in `src/utils/adb.ts`, the remaining 16 chat-core manual test cases authored, and a self-review pass across `src/`.
+
+### Chronological Log
+
+1. **CI risk assessment (conversation, no artifact yet)** — weighed a self-hosted GitHub Actions runner on `RF8T802226Y` (which would let `AUTH-E2E-015`/`016` and all `CHAT-E2E-` scenarios run in CI) against `R2`, `R3`, and `R8`. **Recommended against it**, on two structural grounds rather than tunable ones: `R2` gets actively *worse* under CI (repeated automated Google re-auth at a frequency no human controls is exactly the bot-detection trigger R2 warns about, and a challenge screen in CI fails with nobody present to resolve it), and `R3` is a known-bad pattern — a self-hosted runner on a public repo lets a malicious fork PR execute on a machine holding a live authenticated Google session. `R8` is the *least* of the three: a real violation of its own gate if `CHAT-E2E-002` ran on every push, but the only one with a clean mechanical fix. **Decision: keep CI limited to emulator-safe scenarios; treat the physical-device suite as permanently local-only.** Middle ground identified if partial movement is ever wanted: a self-hosted runner gated to `workflow_dispatch` only (never `push`/`pull_request`), which removes R3's sharpest edge but does *not* fully address R2's frequency concern.
+
+2. **Confirmed emulator/physical-device disambiguation in `config/wdio.android.conf.ts`** — verified two ways rather than assumed. Traced the installed driver source (`appium:avd` → `getRunningAVDWithRetry` → `getRunningAVD` → `getConnectedEmulators()`, which filters to `emulator-XXXX` serials *before* AVD-name matching, so a physical device structurally cannot match), then confirmed live by cross-referencing both devices' logcat against the test's completion timestamp. **Appium's own device targeting is unambiguous.**
+
+3. **Found a real bug the above check surfaced** — `LOGIN-E2E-002` passed on the emulator but emitted a stray `adb: more than one device/emulator` during teardown. Root cause: `deviceArgs()` in `src/utils/adb.ts` only added `-s <udid>` when `DEVICE_UDID` was *set*. With it unset and two devices attached, the failure-capture hooks' own bare `adb` calls were ambiguous — meaning `R6`'s screen-recording capture was **silently non-functional in that configuration, on every test**. Not caught earlier because the calls are best-effort (`try/catch`) or fire-and-forget (`spawn`), so nothing failed loudly.
+
+4. **Fixed `deviceArgs()`** with an explicit resolution order: `DEVICE_UDID` if set → exactly one attached device, target it explicitly anyway → multiple devices with exactly one emulator, prefer the emulator (the CI-safe, credential-free default per the assessment in item 1) → otherwise **throw** rather than silently falling back to an unscoped call. Re-ran `LOGIN-E2E-002`: warning gone, zero ambiguity errors.
+
+5. **Ran the emulator comparison** — `LOGIN-E2E-002` passes; `AUTH-E2E-015`, `AUTH-E2E-016`, `CHAT-E2E-001`, `CHAT-E2E-003` all fail with the *identical* error. Documented in the new `docs/emulator-vs-device-comparison.md`.
+
+6. **`AUTH-E2E-015`'s emulator failure was not what was predicted.** The Play Integrity / SafetyNet hypothesis is **not supported**. The emulator authenticates, renders PUKU's consent page showing `Signed in as editorpuku@gmail.com` (so the emulator *is* pre-authenticated too — previously undocumented), taps Authorize, fires `flutter_web_auth_2.CallbackActivity`, and returns to `sh.puku.app`. It fails only at the final home-screen wait. Root cause left unconfirmed (slow emulator vs. session not established) — per standing instruction, documented rather than retried. Also recorded a **misleading-evidence trap**: emulator logcat shows `ro.product.*_for_attestation` denials that superficially confirm the attestation theory but actually originate from the investigation's own `adb shell` commands (`scontext=u:r:shell:s0`), not from PUKU.
+
+7. **Wrote the remaining 16 chat-core manual test cases** — `CHAT-TC-004` through `CHAT-TC-019`, all marked "Designed, not yet automated" with `Status: Not Run` rather than claiming a passing status. `CHAT-TC-018` (voice) is marked permanently manual-only per `R11`, distinct from the merely not-yet-automated ones.
+
+8. **Self-review pass across `src/`** — findings and fixes below.
+
+### Key Decisions
+
+- **No self-hosted CI runner.** Two of the three named risks (`R2`, `R3`) are structural mismatches between what CI assumes (ephemeral, safe against untrusted changes) and what this suite requires (one irreplaceable, stateful, credential-bearing phone) — not problems a constraint can tune away.
+- **`deviceArgs()` throws rather than guesses** when it cannot safely disambiguate. Consistent with how every other ambiguity in this project has been handled — fail loudly rather than pick silently.
+- **The physical-device dependency is narrower than documented.** It is *not* "OAuth can't work on an emulator." That reframing is recorded because it changes what a future fix would target.
+
+### Observations / Doc Gaps
+
+- **`docs/00-apk-reconnaissance.md` contains a now-contradicted claim** — a section headed "Google OAuth is not a practical automation target," directly superseded by ADR-006 and the passing `AUTH-E2E-015`. Flagged, deliberately **not** rewritten: it is a dated historical record, and this project's stated practice (see README) is to preserve superseded reasoning rather than edit it away. Needs a decision on whether to add a "superseded by ADR-006" pointer.
+- **ADR numbering has gaps** — only `ADR-004` and `ADR-006` exist; 001–003 and 005 were never written. Harmless but will read as missing files to an outside reader.
+- **`src/utils/env.ts` is dead code** — exported but never imported anywhere in `src/`, `tests/`, or `config/`.
+
+### Next Steps
+
+Carried forward from session 1 (unchanged): R13 exploration pass, R10 chat-deletion investigation, scaffolding the remaining chat-core scenarios. Added:
+
+1. Decide whether to disambiguate `AUTH-E2E-015`'s emulator root cause — one timeout-raise experiment would settle it.
+2. Decide on the `00-apk-reconnaissance.md` superseded-claim pointer, the ADR numbering gaps, and the `env.ts` dead code (all flagged above, none actioned unilaterally).

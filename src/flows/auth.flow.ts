@@ -28,8 +28,15 @@ export const authFlow = {
    * Completes the full OAuth consent tap flow (AUTH-E2E-015 / ADR-006):
    * tap "Continue with Google" -> wait for and tap PUKU's "Authorize"
    * consent page in the Chrome Custom Tab -> wait for the app context to
-   * return to sh.puku.app. Requires a physical device with a
-   * pre-authenticated Google account; see ADR-006.
+   * return to sh.puku.app -> wait for the home screen to actually render.
+   *
+   * Only known to succeed on the physical device (RF8T802226Y) with a
+   * pre-authenticated Google account; see ADR-006. Note the dependency is
+   * narrower than "emulators can't do OAuth": measured on 2026-08-06, the
+   * emulator authenticates, renders the consent page, and fires the OAuth
+   * callback successfully — it fails only at the final home-screen wait
+   * below. Root cause unconfirmed (slow emulator vs. session not
+   * established). See docs/emulator-vs-device-comparison.md.
    */
   async completeGoogleSignIn(): Promise<void> {
     await this.attemptGoogleSignIn();
@@ -46,15 +53,26 @@ export const authFlow = {
     // that need to interact with home-screen content immediately (e.g.
     // logout.spec.ts's coordinate-based hamburger tap) need the real UI
     // to be ready, not just the correct package name.
+    //
+    // Kept at the 10000ms default deliberately. A 40s timeout was tested
+    // on 2026-08-06 against the emulator and did NOT help: the emulator's
+    // failure here is Chrome's GPU process crash-looping during the OAuth
+    // handoff, not slow initialization. Raising this only delays the
+    // failure. See docs/emulator-vs-device-comparison.md.
     await homeScreen.waitUntilDisplayed();
   },
 
   /**
    * Precondition helper for tests that need a logged-in state but don't
-   * care how it was reached (e.g. logout.spec.ts). Skips straight through
-   * if the home screen is already displayed (session persisted from a
-   * prior run — noReset:true), otherwise runs the full OAuth consent
-   * flow first.
+   * care how it was reached. Skips straight through if the home screen is
+   * already displayed (session persisted from a prior run — noReset:true),
+   * otherwise runs the full OAuth consent flow first.
+   *
+   * Used by every logged-in-state spec: logout, chat/home-screen,
+   * chat/drawer, chat/send-message. Because they all funnel through here,
+   * they share a single point of failure — if this can't establish a
+   * session on a given target, all four fail identically (confirmed on the
+   * emulator, 2026-08-06).
    */
   async ensureLoggedIn(): Promise<void> {
     if (await homeScreen.isDisplayed()) {
