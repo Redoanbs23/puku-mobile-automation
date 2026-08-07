@@ -171,3 +171,36 @@ Carried forward from session 1 (unchanged): R13 exploration pass, R10 chat-delet
 
 1. Decide whether to disambiguate `AUTH-E2E-015`'s emulator root cause — one timeout-raise experiment would settle it.
 2. Decide on the `00-apk-reconnaissance.md` superseded-claim pointer, the ADR numbering gaps, and the `env.ts` dead code (all flagged above, none actioned unilaterally).
+
+---
+
+## 2026-08-07
+
+### Session Summary
+
+A one-hour autonomous session tasked with implementing chat-core's not-yet-automated P1-P3 scenarios (`CHAT-E2E-004`, `006`, `007`, `009`–`013`, `017`) against the emulator's already-logged-in PUKU session, under two hard boundaries: never re-run `CHAT-E2E-002` (or any message-send) more than once total this session, and never debug/retry `AUTH-E2E-015`'s known OAuth stall or attempt automated Google credential entry. The session's first verification step surfaced a blocker that made the rest of the objective unreachable safely, so it pivoted to root-causing and fixing that blocker instead of guessing at scenario implementations without the live locator confirmation this project has consistently required.
+
+### Chronological Log
+
+1. **Verified `authFlow.ensureLoggedIn()`'s short-circuit behavior**, as instructed, by running `CHAT-E2E-001` then `CHAT-E2E-003` against the emulator (`DEVICE_UDID=emulator-5554`, PUKU manually confirmed logged in beforehand). Neither short-circuited — both fell through to `completeGoogleSignIn()` and hit the already-documented emulator OAuth stall (`docs/emulator-vs-device-comparison.md`). `CHAT-E2E-003` additionally triggered a real Android ANR in both `sh.puku.app` and Chrome's `CustomTabActivity`, worse than the clean 10s timeout seen previously — new evidence for the closed investigation, not pursued further per the standing boundary.
+2. **Root-caused the non-short-circuit as a separate, previously-undocumented bug**, distinct from the OAuth-stall investigation: confirmed via a plain `adb shell am start` (no Appium, no OAuth) that the emulator's manually-established login was actually gone, not merely undetected. `config/wdio.android.conf.ts`'s hard-coded `appium:noReset: false` resets app data at the start of every session, including ones where the app was already logged in — the two verification runs in step 1 each independently wiped the session before `ensureLoggedIn()` ever got to check it.
+3. **Fixed it as an opt-in, non-breaking config change**: `'appium:noReset': process.env.APP_NO_RESET === 'true'`, default unchanged (`false`) so `LOGIN-E2E-002`/`AUTH-E2E-015`/`016` keep resetting to a clean logged-out state as they require. Verified via a dry import of the config (capabilities resolve to `false` by default, `true` with the env var set) — not verified end-to-end, since that would require either a manual re-login or retrying the barred OAuth flow.
+4. **Corrected two stale doc comments found in the process**: `ensureLoggedIn()`'s docstring wrongly claimed `noReset:true` (the actual default is `false` — this exact mismatch is what caused the bug); `completeGoogleSignIn()`'s docstring still described the OAuth-stall root cause as untested when two experiments (timeout, GPU backend) had already ruled hypotheses out on 2026-08-06.
+5. **Did not implement any of the assigned P1-P3 scenarios.** All of them (`CHAT-E2E-004`, `006`, `007`, `009`–`013`, `017`) require a logged-in home screen to even begin, which is unreachable this session without violating the boundary against retrying the OAuth flow. Writing their locators from the test-design doc's prose instead of live-confirming them would also break this project's established discipline (see `test-design-epic-chat-core.md`'s Notes columns, all written from actual live exploration). Left `test-cases/chat/CHAT-TC-004` through `017`/`019` untouched — still accurately "Not Run."
+
+### Key Decisions
+
+- **Stopped rather than guessed.** The task's own instructions required live locator confirmation before automating anything; with the logged-in path unreachable, guessing would have violated that discipline for no real coverage gain.
+- **Treated the `noReset` finding as a distinct bug, not a retry of the closed OAuth-stall investigation.** It concerns state destroyed *before* any OAuth flow starts, and was fixed without invoking OAuth automation at all — consistent with the boundary, not adjacent to it.
+- **Left the config default unchanged.** `APP_NO_RESET` is opt-in specifically so every existing passing test keeps its current guarantees; flipping the default would have silently broken `LOGIN-E2E-002` and both `AUTH-E2E-` scenarios that depend on starting logged out.
+
+### Observations / Doc Gaps
+
+- The emulator is currently **logged out** — confirmed via direct `adb shell am start`, independent of any prior finding. Chat-core's P1-P3 automation work is blocked until it's manually re-authenticated; this is not a gap automation should close by re-attempting the barred OAuth flow.
+- `docs/emulator-vs-device-comparison.md` now carries two distinct findings under the same file: the original OAuth-stall investigation (closed) and this session's session-persistence bug (fixed). Kept them clearly separated by dated heading rather than merged, since they have different causes and different resolution status.
+
+### Next Steps
+
+1. Manually re-authenticate the emulator, then re-verify `ensureLoggedIn()`'s short-circuit with `APP_NO_RESET=true` explicitly set — this was not possible this session and remains unconfirmed end-to-end.
+2. Once confirmed, proceed with live-locator exploration and implementation for `CHAT-E2E-004`, `006`, `007`, `009`–`013`, `017`, in that order (matches this session's original assignment).
+3. Carried forward, unchanged: R13 exploration pass, R10 chat-deletion investigation, the `00-apk-reconnaissance.md`/ADR-numbering/`env.ts` cleanup items from 2026-08-06.

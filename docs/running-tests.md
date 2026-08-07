@@ -15,6 +15,8 @@ Single reference for how to run every test in this project.
 
   On this project, that device is `RF8T802226Y`. Everything else (e.g. `LOGIN-E2E-002`) runs against either the emulator or a physical device, whichever `adb` resolves to.
 
+- **`APP_NO_RESET` environment variable** (optional, default unset/`false`) — every test session resets PUKU's app data before the test body runs, which is what guarantees `LOGIN-E2E-002`/`AUTH-E2E-015`/`016` reliably start from the login screen. Set `APP_NO_RESET=true` only if you need an already-logged-in session to survive into the test run instead of being reset out from under it (see `docs/emulator-vs-device-comparison.md`'s 2026-08-07 entry). Do not set this for the standard suite — it will break every test that expects to start logged out.
+
 ## The general pattern
 
 ```bash

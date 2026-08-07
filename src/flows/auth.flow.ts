@@ -35,8 +35,11 @@ export const authFlow = {
    * narrower than "emulators can't do OAuth": measured on 2026-08-06, the
    * emulator authenticates, renders the consent page, and fires the OAuth
    * callback successfully — it fails only at the final home-screen wait
-   * below. Root cause unconfirmed (slow emulator vs. session not
-   * established). See docs/emulator-vs-device-comparison.md.
+   * below. Two hypotheses (slow emulator; Chrome GPU-process crash-looping)
+   * were tested directly on 2026-08-06 and both were ruled out. Root cause
+   * remains unconfirmed beyond that; investigation is deliberately closed,
+   * not open-ended — do not retry it here. See
+   * docs/emulator-vs-device-comparison.md.
    */
   async completeGoogleSignIn(): Promise<void> {
     await this.attemptGoogleSignIn();
@@ -65,8 +68,17 @@ export const authFlow = {
   /**
    * Precondition helper for tests that need a logged-in state but don't
    * care how it was reached. Skips straight through if the home screen is
-   * already displayed (session persisted from a prior run — noReset:true),
-   * otherwise runs the full OAuth consent flow first.
+   * already displayed, otherwise runs the full OAuth consent flow first.
+   *
+   * That short-circuit only has something to detect if the session survived
+   * into this run. The default capability (`appium:noReset: false`, see
+   * config/wdio.android.conf.ts) resets app data at the start of *every*
+   * session — including ones where the app was already logged in, manually
+   * or otherwise. Set `APP_NO_RESET=true` when invoking tests if you need a
+   * prior login to persist across runs; without it, this always falls
+   * through to completeGoogleSignIn(). Discovered 2026-08-07 when this
+   * silently wiped a manually-established emulator login between two
+   * verification runs — see docs/emulator-vs-device-comparison.md.
    *
    * Used by every logged-in-state spec: logout, chat/home-screen,
    * chat/drawer, chat/send-message. Because they all funnel through here,

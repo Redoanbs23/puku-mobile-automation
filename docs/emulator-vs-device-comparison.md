@@ -96,6 +96,68 @@ Not executed, by design. It sends a real message to a live AI backend on every r
 
 Note that it would fail on the emulator regardless, for the same `ensureLoggedIn()` reason as the other three cascading failures.
 
+## 2026-08-07 — manually-established emulator logins do not survive test runs
+
+A separate, previously-undocumented issue, found while checking whether `authFlow.ensureLoggedIn()` correctly short-circuits when the emulator is already logged in.
+
+**Setup:** the emulator's PUKU app was manually logged in (confirmed by Redoan) before this check began.
+
+**What happened:** `CHAT-E2E-001` and `CHAT-E2E-003` were run against the emulator (`DEVICE_UDID=emulator-5554`) to observe `ensureLoggedIn()`. Neither short-circuited — both fell through to `completeGoogleSignIn()` and hit the already-documented OAuth stall above. Afterward, a plain `adb shell am start -n sh.puku.app/.MainActivity` (no Appium session, no OAuth involved) rendered PUKU's **login screen**, not the home screen — confirming the manually-established session was gone, not merely undetected.
+
+**Additional evidence — a real ANR, not just a timeout.** `CHAT-E2E-003`'s failure was more severe than `CHAT-E2E-001`'s clean 10s `waitUntilDisplayed` timeout. Two separate Android ANRs fired during the same run, per `logcat.txt` in the failure-capture artifact (`test-results/failures/chat-e2e-003-.../`):
+
+```
+08-07 12:36:52.802  ActivityManager: ANR in sh.puku.app (sh.puku.app/.MainActivity)
+  Reason: Input dispatching timed out — waited 5171ms for FocusEvent(hasFocus=false)
+08-07 12:36:55.260  ActivityManager: Completed ANR of sh.puku.app in 37406ms, latency 916ms
+
+08-07 12:36:59.028  WindowManager: ANR in Window{790d796 com.android.chrome/org.chromium.chrome.browser.customtabs.CustomTabActivity}
+  Reason: Input dispatching timed out — waited 5101ms for FocusEvent(hasFocus=true)
+```
+
+First `sh.puku.app/.MainActivity` itself stopped responding to input, then — six seconds later — Chrome's `CustomTabActivity` (the same stale consent-page surface described above) also stopped responding. `ActivityManager` began collecting stack traces for Chrome's process (pid 10098) into an on-device temp file (`/data/anr/temp_anr_2155761641016068859.txt`) shortly after. Full ANR trace dumps for both events still exist on the emulator's disk (`/data/anr/anr_2026-08-07-12-36-24-968`, `/data/anr/anr_2026-08-07-12-37-04-464` — correspondence inferred from timestamp proximity, not confirmed by content) but were **not** pulled into the repo — this project's failure-capture hook only captures `logcat`, screenshot, and video, not `/data/anr/` dumps or tombstones. Only `logcat.txt`, `screenshot.png`, and `recording.mp4` exist in the repo's own failure artifact for this run.
+
+This is new evidence for the closed `AUTH-E2E-015` investigation, not pursued further per the standing agreement to leave that investigation closed — recorded here for whoever picks it up next.
+
+**Root cause:** `config/wdio.android.conf.ts` hard-coded `'appium:noReset': false`. Per Appium/UiAutomator2 semantics, `noReset: false` resets the app's data at the start of *every* session — this is *not* specific to a failed test; it happens before the test body runs at all. Both `CHAT-E2E-001` and `CHAT-E2E-003` each independently cleared the app's data before `ensureLoggedIn()` ever got to call `homeScreen.isDisplayed()`, so the check correctly reported `false` — the session really was gone by the time it ran.
+
+**This is a different bug from the AUTH-E2E-015 stall above.** That investigation is about what happens *after* the OAuth callback fires and remains closed per agreement. This one is about test-harness configuration destroying session state *before* any OAuth flow is even attempted, and was fixed without touching the OAuth path at all.
+
+**Fix:** `config/wdio.android.conf.ts` now reads `'appium:noReset': process.env.APP_NO_RESET === 'true'` — default unchanged (`false`, matching every existing test's expectations: `LOGIN-E2E-002`, `AUTH-E2E-015`/`016` all rely on starting from a clean logged-out state). Set `APP_NO_RESET=true` explicitly when a test run needs to preserve an existing login across the session boundary.
+
+**Verified end-to-end, 2026-08-07 (later same day).** Redoan manually logged into PUKU on the emulator and confirmed it went straight to the home screen. `CHAT-E2E-001` was then run once with `DEVICE_UDID=emulator-5554 APP_NO_RESET=true` and **passed in 9.5s**, with `ensureLoggedIn()` correctly short-circuiting — confirmed via log inspection that only `chatPromptHeading`, `chatInputField`, and `modelSelector` were ever queried, with no `findElement` call for `~Continue with Google` anywhere in the run, i.e. no fall-through to `completeGoogleSignIn()`. (The first attempt at this verification failed for an unrelated reason — see the `isDisplayed()` timing-bug entry immediately below — and was fixed before this passing run.) The `APP_NO_RESET` fix itself is now confirmed working, not just correct in isolation.
+
+**Current state, as of this entry:** the emulator is logged in and `ensureLoggedIn()` correctly detects it. Chat-core P1-P3 scenarios requiring a logged-in state are now unblocked, provided `APP_NO_RESET=true` is set when invoking them.
+
+## 2026-08-07 — `isDisplayed()`'s single-snapshot check races a slower `APP_NO_RESET=true` cold launch
+
+A second, distinct bug, found while verifying the `noReset` fix above. Not the same root cause — recorded separately rather than folded into the entry above, since the two have independent causes and independent fixes.
+
+**What happened:** with the emulator now genuinely logged in and `APP_NO_RESET=true` set, running `CHAT-E2E-001` still failed — but not with the known OAuth stall. `ensureLoggedIn()`'s `homeScreen.isDisplayed()` check queried `~How can i help you today!` once, 5.1s after session creation, got "no such element," and treated that as "not logged in." It then fell through to `attemptGoogleSignIn()`, which polled for `~Continue with Google` for a full 10s and never found *that* either — meaning the app was never on the login screen at any point this run, just still mid-launch.
+
+**Confirmed the session was never actually lost.** Immediately after the failed run, a plain `adb shell dumpsys window` + `uiautomator dump` (no Appium, no OAuth) showed the app already back on the true home screen (`content-desc="How can i help you today!"`, `content-desc="puku-ai-2.7"` both present, `sh.puku.app/.MainActivity` focused). This ruled out both of the other candidate explanations considered at the time: `APP_NO_RESET` not being applied, and Appium resetting the app despite the flag — if either were true, the login state would have been wiped and the login screen would be showing instead. Neither was.
+
+**Root cause:** `HomeScreen.isDisplayed()` (`src/screens/home.screen.ts`) did a single, non-retried `.isDisplayed()` check with no polling window. Under the old `noReset:false` default this was never exposed, because the app always launched into the lightweight login screen — a fast render with nothing to race. `APP_NO_RESET=true` introduces a new case this check was never built for: a session-restoring cold launch that can legitimately take longer than an instant to render, producing a false "not logged in" read purely from bad timing, not a real absence.
+
+**This is a different bug from the `noReset` config bug above.** That one was about test-harness configuration destroying session state before any check ran. This one is about a readiness check with no tolerance for how long a legitimately-preserved session takes to render. Fixing the first was necessary but not sufficient for the second to surface — the timing bug only became visible once a real logged-in cold launch existed to race against.
+
+**Fix:** `isDisplayed()` now uses `waitForElement()` with a short 4-second poll window, returning `false` on timeout instead of a single unretried check:
+
+```ts
+async isDisplayed(): Promise<boolean> {
+  try {
+    await this.waitForElement(this.chatPromptHeading, 4000);
+    return true;
+  } catch {
+    return false;
+  }
+}
+```
+
+4s tolerates the slower cold launch without meaningfully slowing down the normal `noReset:false` path, where the correct answer is genuinely "false" and resolves quickly regardless.
+
+**Verified end-to-end:** re-running `CHAT-E2E-001` once more with the fix applied (`DEVICE_UDID=emulator-5554 APP_NO_RESET=true`) passed in 9.5s, short-circuiting correctly — see the verification note in the entry above.
+
 ## Conclusions
 
 1. **The physical-device dependency is real, but narrower than assumed.** It is not "Google OAuth cannot work on an emulator" — the emulator authenticates, renders consent, and fires the callback successfully. The dependency is localized to whatever happens *after* the OAuth callback, and survived both a 4x timeout increase and a GPU-backend change.

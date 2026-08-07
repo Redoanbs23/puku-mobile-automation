@@ -62,8 +62,25 @@ class HomeScreen extends BaseScreen {
     return $(`//android.view.View[@text != "" and @text != "${ownMessage}"]`);
   }
 
+  /**
+   * A single, un-retried isDisplayed() check races a cold app launch: with
+   * APP_NO_RESET=true (config/wdio.android.conf.ts), a session-restoring
+   * launch can take longer to render than the instant this check used to
+   * run at, producing a false "not logged in" read even though the app is
+   * genuinely logged in and about to show the home screen. Found via
+   * ensureLoggedIn() (src/flows/auth.flow.ts) misfiring on 2026-08-07 — see
+   * docs/emulator-vs-device-comparison.md. Short poll window instead: long
+   * enough to tolerate that slower cold launch, short enough not to
+   * meaningfully slow down the normal noReset:false path, where the
+   * correct answer is genuinely "false" and returns quickly anyway.
+   */
   async isDisplayed(): Promise<boolean> {
-    return this.chatPromptHeading.isDisplayed();
+    try {
+      await this.waitForElement(this.chatPromptHeading, 4000);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async waitUntilDisplayed(timeout = 10000): Promise<void> {

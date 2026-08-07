@@ -16,8 +16,19 @@ export const androidCapabilities = {
   'appium:app': localEnvironment.appPath,
   'appium:appPackage': 'sh.puku.app',
   'appium:autoGrantPermissions': true,
-  'appium:noReset': false,
+  // Default false, unchanged: every session resets app data, guaranteeing a
+  // clean logged-out state (relied on by LOGIN-E2E-002, AUTH-E2E-015/016,
+  // all of which expect to start from the login screen). Opt-in only:
+  // APP_NO_RESET=true skips that reset so a session already logged in
+  // (manually or otherwise) survives into the next test run. Needed for any
+  // chat-core scenario that assumes an existing logged-in state rather than
+  // re-running the OAuth flow itself. See docs/emulator-vs-device-comparison.md
+  // (2026-08-07 entry) — discovered when this same default reset silently
+  // wiped a manually-established emulator login between test invocations.
+  'appium:noReset': process.env.APP_NO_RESET === 'true',
   ...targetCapability,
 };
 
-export const androidServices: Options.Testrunner['services'] = [['appium', { args: { address: '127.0.0.1', port: 4723 } }]];
+export const androidServices: Options.Testrunner['services'] = [
+  ['appium', { args: { address: '127.0.0.1', port: 4723 } }],
+];
