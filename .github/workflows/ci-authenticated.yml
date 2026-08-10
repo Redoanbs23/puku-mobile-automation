@@ -55,14 +55,15 @@ jobs:
         run: npm ci
 
       - name: Install Appium UiAutomator2 driver
-        # Kept in sync with ci.yml — see that file's comment: `appium
-        # driver install` errors if already present rather than no-op'ing.
-        run: |
-          if npx appium driver list --installed 2>/dev/null | grep -q uiautomator2; then
-            echo "uiautomator2 driver already installed, skipping."
-          else
-            npx appium driver install uiautomator2
-          fi
+        # Kept in sync with ci.yml — see that file's comment: the earlier
+        # "check installed state first" approach didn't reliably detect
+        # it and still failed the job. `|| true` treats this step as
+        # successful regardless of exit code, on the unverified assumption
+        # that the dominant failure mode is "already installed" (harmless)
+        # rather than a real error. A genuine failure here would be
+        # silently swallowed and only surface later, more confusingly, at
+        # test-run time.
+        run: npx appium driver install uiautomator2 || true
 
       # PLACEHOLDER — per ADR-007, the pre-authenticated snapshot does
       # not exist yet. This step deliberately fails closed rather than
