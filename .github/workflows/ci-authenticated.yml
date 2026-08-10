@@ -55,7 +55,14 @@ jobs:
         run: npm ci
 
       - name: Install Appium UiAutomator2 driver
-        run: npx appium driver install uiautomator2
+        # Kept in sync with ci.yml — see that file's comment: `appium
+        # driver install` errors if already present rather than no-op'ing.
+        run: |
+          if npx appium driver list --installed 2>/dev/null | grep -q uiautomator2; then
+            echo "uiautomator2 driver already installed, skipping."
+          else
+            npx appium driver install uiautomator2
+          fi
 
       # PLACEHOLDER — per ADR-007, the pre-authenticated snapshot does
       # not exist yet. This step deliberately fails closed rather than
