@@ -1,0 +1,99 @@
+name: CI
+
+# Stage 1 of the two-stage pipeline per the CI/CD readiness analysis
+# and ADR-007 (docs/adr/ADR-007-ci-pre-authenticated-snapshot-strategy.md).
+# Stage 2 (the pre-authenticated snapshot suite) lives in the separate
+# workflow file ci-authenticated.yml, deliberately split out rather
+# than run as a second job here — see that file's header comment for
+# why the split matters.
+#
+# This workflow runs on every push and pull_request, including from
+# forks. That's safe by GitHub's default behavior of withholding
+# repository/environment secrets from pull_request runs triggered by
+# forks — though this job needs no secrets at all regardless, so that
+# protection isn't even load-bearing here.
+#
+# Per ADR-007 control #4, changes to this file require CODEOWNERS
+# review.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Least-privilege default; jobs opt into anything more.
+permissions:
+  contents: read
+
+jobs:
+  emulator-safe:
+    name: Lint, typecheck, and LOGIN-E2E-002 (vanilla emulator)
+    runs-on: macos-latest
+    # macos-latest chosen over ubuntu+KVM for the emulator boot step:
+    # reactivecircus/android-emulator-runner works out of the box here
+    # without needing to configure KVM permissions on the runner. Slower
+    # and more expensive per-minute than Linux, but avoids relying on
+    # KVM enablement behavior that varies by GitHub-hosted runner image.
+    # Revisit if CI cost/time becomes a real constraint.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # Matches package.json's "engines": { "node": ">=24" } — the
+          # project's actual toolchain (nvm, set up at project start).
+          # Note @types/node's "^22.0.0" is a type-definitions version,
+          # not the runtime version; don't infer Node version from it.
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Install Appium UiAutomator2 driver
+        run: npx appium driver install uiautomator2
+
+      # NOTE: PUKU's APK is gitignored (apk/, *.apk) and is not fetched
+      # anywhere in this workflow yet. This step is a placeholder — it
+      # fails loudly and clearly rather than letting later steps fail
+      # confusingly against a missing APK. Replace with a real source
+      # (private artifact storage, a release download, etc.) before
+      # this job can actually pass end-to-end. Flagged, not solved, by
+      # this workflow — matches the CI/CD readiness analysis's own
+      # "APK delivery mechanism missing" finding.
+      - name: Obtain PUKU APK (PLACEHOLDER — not implemented)
+        run: |
+          echo "::error::PUKU_APK_PATH has no source in CI yet. The APK is" \
+               "gitignored and not fetched by this workflow. This step is a" \
+               "deliberate placeholder — wire a real source (private artifact" \
+               "storage, release download, etc.) before this job can pass."
+          exit 1
+
+      - name: Run LOGIN-E2E-002 against a vanilla emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          # Vanilla AVD — deliberately not the pre-authenticated snapshot.
+          # LOGIN-E2E-002 has no login dependency (see the CI/CD readiness
+          # analysis), so a fresh, unauthenticated emulator is correct here.
+          script: npm test -- --mochaOpts.grep="LOGIN-E2E-002"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-safe-results
+          path: |
+            test-results/junit/**
+            allure-results/**
+          if-no-files-found: warn

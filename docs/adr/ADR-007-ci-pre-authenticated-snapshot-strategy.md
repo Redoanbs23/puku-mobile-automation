@@ -1,0 +1,46 @@
+# ADR-007: CI Mitigation via a Pre-Authenticated Android Emulator Snapshot
+
+**Status:** Accepted
+**Date:** 2026-08-10
+
+## Context
+
+ADR-006 established that `AUTH-E2E-015` (the real Google OAuth consent-tap flow) is device-dependent and cannot run in CI — CI runners and fresh emulators have no pre-configured Google account, so the flow there lands on full credential entry rather than the one-tap consent screen ADR-006 automates. That ADR left CI's logged-in-state coverage as an open, unsolved item.
+
+Since then, two things changed the stakes of solving it:
+
+1. The project's own `docs/`/`ai-log/` CI/CD readiness analysis identified that 11 of 15 active scenarios (`AUTH-E2E-016`, `CHAT-E2E-001/003/004/006/007/009/010/011/012/013`) don't actually need to *run* the OAuth flow in CI — they only need `ensureLoggedIn()` to short-circuit against an already-logged-in session, which was already proven working end-to-end on the emulator via `APP_NO_RESET=true` plus a manually-established login (`docs/emulator-vs-device-comparison.md`, 2026-08-07 entries). The missing piece for CI specifically is durability: a way for an ephemeral CI runner to boot from that already-logged-in state instead of a vanilla AVD.
+2. The project escalated from a portfolio-only exercise to a real team project with an actual deployment gate: merge to `main` → CI triggers → mobile automation runs → deployment proceeds only if required tests pass. Reliable automated execution of the logged-in-state suite became a real, mandatory priority rather than a nice-to-have.
+
+The candidate mitigation considered: bake a versioned Android emulator snapshot with `editorpuku@gmail.com` already signed in and PUKU already authorized, and have CI boot from that snapshot instead of a vanilla AVD.
+
+This is new territory beyond what R2/R3/R8 in the existing test-design docs already cover — it means storing a real account's authenticated session state as a durable, versioned artifact, not a one-time manual device login. A dedicated risk assessment (Murat/TEA, `bmad-tea`) was run before any implementation, iterated twice as new facts came in:
+
+**R16 (SEC)** — The snapshot is a durable binary artifact capturing OS-level Google authentication state, not a plain-text credential. This matters for two reasons: it's invisible to standard secret-scanning tooling (nothing about a multi-hundred-MB `.avd` snapshot directory looks string-shaped the way a leaked API key does), and a restored snapshot is an *already-authenticated* session — no login step, no password, no 2FA to clear, unlike a leaked credential that still requires further action to exploit. Initially scored **9** (P=3, I=3) on the assumption that a full OS-level Google sign-in implies broad account access (Gmail, Drive, contacts, etc.) beyond PUKU itself. Revised down to **6** (P=3, I=2) after confirming `editorpuku@gmail.com` is a single-purpose account, created only for PUKU login, with nothing else attached — compromise is bounded to unauthorized PUKU usage/cost exposure and chat-history access, not broad Google identity compromise. The detection-gap and instant-usability points are unchanged by this correction; only the blast radius shrank.
+
+**R17 (SEC/OPS)** — CI-reachable storage for the snapshot risks recreating the already-rejected self-hosted-runner exposure pattern from the earlier CI strategy assessment (`ai-log/daily-progress.md`, session 2): a malicious fork PR reaching a live, working authenticated session, just relocated from hardware to a downloadable artifact. Initially scored **6** (P=2, I=3). Revised **up** to **9** (P=3, I=3) after confirming two facts together: the automation repo (this one — distinct from PUKU's own separate, private application codebase) is **public and open to external pull requests**, and this is now a real team deployment gate, not a portfolio demo. This is the highest-surface case in the original three-way comparison. Critically, R17 is a distinct risk from R16, not a smaller version of it scaled by account blast radius — R17 is about whether an unauthorized party can reach or influence the CI/deployment pipeline at all, which matters independently of what any single credential inside it happens to unlock. A real deployment gate raises R17's stakes on its own terms: unauthorized pipeline access now risks gate tampering (a compromised run reporting false-positive "tests passed," shipping bad code to production), not just credential exposure.
+
+**R18 (OPS)** — Snapshot staleness/expiry is more demanding to manage than ADR-006's live-device framing. A live device's Google session is continuously kept warm by Play Services' routine background token refresh; a frozen snapshot gets none of that while it sits in storage, and can go stale purely from being unused, on an uncertain (~6-month-order, unconfirmed against Google's actual current policy) timeline — potentially faster than the live device would ever experience under normal use. Versioning multiple snapshots over time compounds this: "is the account still valid" stops being a single fact (as it is for the one live device) and becomes "which version, and is *that* one still valid." Scored **6** (P=3, I=2) — near-certain to eventually matter without an active refresh cadence, but bounded impact (blocks the CI logged-in-state suite specifically, with a known recovery path: rebuild the snapshot).
+
+## Decision
+
+Proceed with the pre-authenticated snapshot approach. The automation repo stays public — no change to its contribution model — because the actual exposure R17 describes can be closed at the workflow/trigger level using GitHub Actions' own trust boundaries, rather than by restricting who can open a pull request.
+
+**R17 mitigation — four structural controls, all required together:**
+
+1. The snapshot-fetching job triggers only on `workflow_dispatch` (manually fired by a maintainer) and/or `push` to `main` post-merge. It never triggers on `pull_request` from a fork, and nothing touching the snapshot or its access credential may run via `pull_request_target` or `workflow_run` against unreviewed fork code — the well-known "pwn request" pattern that defeats GitHub's default protection of withholding secrets from fork-triggered `pull_request` runs.
+2. The deployment-gate job evaluates the merged `main` commit, not a PR branch — consistent with gating deployment on what's actually being deployed, not a contributor's unreviewed proposal.
+3. The snapshot access credential sits behind a GitHub Environment requiring manual maintainer approval, as defense-in-depth beyond trigger-type restriction alone — this protects against misconfiguration, not only malicious intent.
+4. Branch protection / CODEOWNERS requires review specifically on any change to `.github/workflows/*`, so a future edit — however well-intentioned (e.g., someone changing a trigger to fix an unrelated caching issue) — cannot silently reopen the `pull_request_target` hole without a trusted reviewer signing off.
+
+**R16 mitigation:** the snapshot's storage path never exists inside the git working tree at all — not merely `.gitignore`'d, structurally absent, so there is no reliance on an ignore rule surviving every future `git add`. Storage lives outside the repo entirely, access-restricted, independent of whatever CI wiring exists.
+
+**R18 mitigation:** a scheduled, proactive re-bake cadence (not reactive "fix it when a run fails"), with a single current-version pointer/alias rather than accumulating untracked historical snapshots as if all are equally valid.
+
+## Consequences
+
+- **This relies on GitHub's default behavior of withholding secrets from fork-triggered `pull_request` runs as the core of R17's mitigation.** That behavior has not yet been empirically verified against a real fork PR attempting to reach the credential — it is currently trusted based on documented platform behavior, not confirmed firsthand. This is tracked as a required follow-up, not a blocker to accepting this ADR, but it must be verified before this mitigation is relied upon as the sole line of defense.
+- R18's staleness risk is **accepted and managed, not solved** — a scheduled re-bake cadence bounds the risk but doesn't eliminate the possibility of an out-of-cycle revocation (password change, security event, manual grant revocation) invalidating a snapshot between scheduled refreshes, the same category of risk ADR-006 already accepted for the live device.
+- `AUTH-E2E-015` and `CHAT-E2E-002` remain permanently excluded from any CI-triggered suite regardless of this snapshot strategy — per ADR-006 and R8 respectively, this ADR does not attempt to bring either into CI.
+- Future maintainers extending CI workflows must treat any change to trigger types on workflows touching the snapshot or its credentials as security-relevant, not routine — this ADR's four-control mitigation only holds if all four remain intact together; relaxing any one (especially control 1's trigger restriction) reopens R17 at its full, unmitigated score.
+- If `editorpuku@gmail.com`'s account scope ever changes (e.g., additional services get attached to it for convenience), R16's revised score of 6 no longer holds and should be reassessed — the revision from 9 to 6 was earned by a specific, confirmed fact about this account, not a general property of pre-authenticated snapshots.

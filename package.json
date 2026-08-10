@@ -4,6 +4,9 @@
   "private": true,
   "description": "Black-box mobile test automation framework for PUKU Editor (Android) — WebdriverIO + Appium/UiAutomator2.",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "test": "wdio run wdio.conf.ts",
     "test:p0": "wdio run wdio.conf.ts --mochaOpts.grep=@p0",
