@@ -1,7 +1,7 @@
 # CHAT-TC-010: Settings toggles respond without crashing
 
 **Priority:** P1 (test-design-epic-chat-core.md coverage matrix)
-**Linked automated test:** `CHAT-E2E-010` — designed, not yet automated
+**Linked automated test:** `CHAT-E2E-010` (tests/specs/chat/settings-toggles.spec.ts)
 **Linked risk(s):** —
 
 ## Preconditions
@@ -25,10 +25,15 @@ Both toggles respond to being tapped, their visible state reflects the change, a
 
 ## Status
 
-Not Run
+Pass (adjusted from original assumption — see Notes)
 
 ## Notes
 
-**Designed, not yet automated.** This scenario exists in `_bmad-output/test-artifacts/test-design-epic-chat-core.md`'s coverage matrix but has no corresponding automated test yet — `src/screens/settings.screen.ts` does not currently model either toggle.
+Automation status: Automated (passing) — `tests/specs/chat/settings-toggles.spec.ts`. Requires `DEVICE_UDID` and, on the emulator, `APP_NO_RESET=true` (self-skips otherwise). Verified against the emulator on 2026-08-07.
 
-This case leaves the account's settings in a modified state. Either toggle both back afterward, or accept the drift — but be aware that "Notifications" in particular may have effects beyond the app (system-level notification permissions), so prefer restoring it.
+**Two real findings from live exploration on 2026-08-07, both reflected in the automated test:**
+
+1. Haptic feedback's actual tappable control is a separate, unlabeled child element nested under the labeled row — tapping the row's own label area does nothing. The automated test tap targets the correct child element (see `settings.screen.ts`).
+2. **"Notifications" is not a working toggle today**, contrary to this case's original assumption. Tapping it shows a "Notifications action placeholder" message and produces no persistent state change — no navigation, no checked/unchecked attribute to flip. This looks like an unimplemented stub in the app itself, not a system-level notification-permissions link as originally guessed. The automated test only asserts tapping it doesn't crash the app, matching this real behavior rather than the original expectation of a second working switch.
+
+Haptic feedback is toggled and then restored to its original state within the test itself (asserted, not just attempted) — no manual restoration needed.

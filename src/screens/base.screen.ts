@@ -25,4 +25,18 @@ export abstract class BaseScreen {
   protected async waitForElement(element: ChainablePromiseElement, timeout = 10000): Promise<void> {
     await element.waitForDisplayed({ timeout });
   }
+
+  /**
+   * Shared "Back" control, confirmed with identical content-desc on the
+   * Chats history, Artifacts, and Code sections (live exploration,
+   * 2026-08-07). Not present on every screen that needs a back action —
+   * Projects' equivalent control has no content-desc at all (a gap, same
+   * class as the hamburger trigger) — so callers there use driver.back()
+   * (the Android system back action) instead, which works uniformly
+   * across all of these sections regardless of whether this locator
+   * exists on a given one.
+   */
+  get backButton(): ChainablePromiseElement {
+    return this.byContentDesc('Back');
+  }
 }

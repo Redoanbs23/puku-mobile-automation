@@ -1,7 +1,7 @@
 # CHAT-TC-007: Empty message cannot be sent
 
 **Priority:** P1 (test-design-epic-chat-core.md coverage matrix)
-**Linked automated test:** `CHAT-E2E-007` — designed, not yet automated
+**Linked automated test:** `CHAT-E2E-007` (tests/specs/chat/empty-message.spec.ts)
 **Linked risk(s):** —
 
 ## Preconditions
@@ -23,12 +23,12 @@ No message is sent. Either no send control is presented at all while the input i
 
 ## Status
 
-Not Run
+Pass
 
 ## Notes
 
-**Designed, not yet automated.** This scenario exists in `_bmad-output/test-artifacts/test-design-epic-chat-core.md`'s coverage matrix but has no corresponding automated test yet.
+Automation status: Automated (passing) — `tests/specs/chat/empty-message.spec.ts`. Requires `DEVICE_UDID` and, on the emulator, `APP_NO_RESET=true` (self-skips otherwise). Verified against the emulator on 2026-08-07.
 
-Live exploration on 2026-08-06 found that the send control **does not render at all** while the chat input is empty — it only appears once text is present (see `ai-log/lessons-learned.md`). So the likely-correct expected result here is "no send control exists," not "send control is present but disabled." The step above is worded to accept either, since only the empty-state absence has been directly confirmed.
+Live exploration on 2026-08-06 found that the send control **does not render at all** while the chat input is empty — it only appears once text is present (see `ai-log/lessons-learned.md`). Since there's no locator to query for "does it exist," the automated test instead taps the known send-button coordinate with the input empty and asserts nothing happened (no navigation, input still empty) — matching this case's own accepted wording that either outcome (no control at all, or a no-op tap) is a pass.
 
 This case does not trigger a real message send, so it carries no R8 cost exposure.

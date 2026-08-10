@@ -1,7 +1,7 @@
 # CHAT-TC-004: Model selector opens and lists available models
 
 **Priority:** P1 (test-design-epic-chat-core.md coverage matrix)
-**Linked automated test:** `CHAT-E2E-004` — designed, not yet automated
+**Linked automated test:** `CHAT-E2E-004` (tests/specs/chat/model-selector.spec.ts)
 **Linked risk(s):** R12
 
 ## Preconditions
@@ -22,10 +22,10 @@ The model selector opens and presents a list of selectable models.
 
 ## Status
 
-Not Run
+Pass
 
 ## Notes
 
-**Designed, not yet automated.** This scenario exists in `_bmad-output/test-artifacts/test-design-epic-chat-core.md`'s coverage matrix but has no corresponding automated test yet — no `CHAT-E2E-004` spec exists in `tests/specs/chat/`.
+Automation status: Automated (passing) — `tests/specs/chat/model-selector.spec.ts`. Requires `DEVICE_UDID` and, on the emulator, `APP_NO_RESET=true` (self-skips otherwise). Verified against the emulator on 2026-08-07.
 
-Do not treat the specific model names in the test design (`puku-ai-2.8`, `Opus 4.8`) as a fixed expectation. The available set drifts — the selector was observed as `puku-ai-2.7` on 2026-08-04 and `puku-ai-2.8` by 2026-08-06. Per R12, model availability may also be gated by the test account's plan tier ("Power" as observed), so a missing model may be an account-state condition rather than an app defect. Confirm the account's current tier before filing any discrepancy as a bug.
+Do not treat the specific model names in the test design (`puku-ai-2.8`, `Opus 4.8`) as a fixed expectation — the automated test deliberately does not assert exact model names either, only that the dialog opens and an option from each currently-known model family is present. The available set drifts, and it's broader than a simple version bump: live exploration on 2026-08-07 found `puku-ai-2.7`, `puku-ai-2.8`, and `Opus 4.8` all listed as separate, concurrently-available options, not one replacing another. Per R12, model availability may also be gated by the test account's plan tier ("Power" as observed), so a missing model may be an account-state condition rather than an app defect. Confirm the account's current tier before filing any discrepancy as a bug.

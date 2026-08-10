@@ -1,7 +1,7 @@
 # CHAT-TC-013: Code section opens without crashing
 
 **Priority:** P2 (test-design-epic-chat-core.md coverage matrix)
-**Linked automated test:** `CHAT-E2E-013` — designed, not yet automated
+**Linked automated test:** `CHAT-E2E-013` (tests/specs/chat/code-section.spec.ts)
 **Linked risk(s):** R13
 
 ## Preconditions
@@ -23,10 +23,10 @@ The Code section opens and the app does not crash.
 
 ## Status
 
-Not Run
+Pass
 
 ## Notes
 
-**Designed, not yet automated.** This scenario exists in `_bmad-output/test-artifacts/test-design-epic-chat-core.md`'s coverage matrix but has no corresponding automated test yet.
+Automation status: Automated (passing) — `tests/specs/chat/code-section.spec.ts`. Requires `DEVICE_UDID` and, on the emulator, `APP_NO_RESET=true` (self-skips otherwise). Verified against the emulator on 2026-08-07.
 
-**Smoke-level only, deliberately** — same R13 reasoning as CHAT-TC-011. This section is unexplored; do not extend into deeper assertions before a dedicated exploration pass. Record what's actually on screen when executing manually.
+**Smoke-level only, deliberately** — same R13 reasoning as CHAT-TC-011. Live exploration on 2026-08-07 found this section renders a "Code" header, a "No sessions found" empty state, a "New Session" button, a "Refresh sessions" control, and a labeled "Back" button. Do not extend into deeper assertions before a dedicated exploration pass.

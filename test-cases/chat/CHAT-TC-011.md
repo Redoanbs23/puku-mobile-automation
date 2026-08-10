@@ -1,7 +1,7 @@
 # CHAT-TC-011: Projects section opens without crashing
 
 **Priority:** P2 (test-design-epic-chat-core.md coverage matrix)
-**Linked automated test:** `CHAT-E2E-011` — designed, not yet automated
+**Linked automated test:** `CHAT-E2E-011` (tests/specs/chat/projects-section.spec.ts)
 **Linked risk(s):** R13
 
 ## Preconditions
@@ -23,10 +23,10 @@ The Projects section opens and the app does not crash.
 
 ## Status
 
-Not Run
+Pass
 
 ## Notes
 
-**Designed, not yet automated.** This scenario exists in `_bmad-output/test-artifacts/test-design-epic-chat-core.md`'s coverage matrix but has no corresponding automated test yet.
+Automation status: Automated (passing) — `tests/specs/chat/projects-section.spec.ts`. Requires `DEVICE_UDID` and, on the emulator, `APP_NO_RESET=true` (self-skips otherwise). Verified against the emulator on 2026-08-07.
 
-**Smoke-level only, deliberately.** Per R13, this section has never been explored — its contents, locator coverage, and testability are entirely unknown. Do not extend this case into deeper functional assertions until a dedicated Appium Inspector exploration pass has been run on the section, following the same discipline used for the login, home, drawer, and Settings screens. Executing this case manually is itself a useful first step toward that exploration: record what's actually on the screen.
+**Smoke-level only, deliberately.** Per R13, this section had never been explored before the 2026-08-07 pass — its contents render as a "Projects" header, a "No projects yet" empty state, and a "New project" button. Do not extend this case into deeper functional assertions until a further exploration pass covers the "New project" flow itself. One finding from that pass: this section's back control has no content-desc at all (a gap, same class as the hamburger trigger) — the automated test uses the Android system back action instead of a locator for it.

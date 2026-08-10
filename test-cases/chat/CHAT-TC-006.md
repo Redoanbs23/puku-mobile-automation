@@ -1,7 +1,7 @@
 # CHAT-TC-006: "New chat" starts a fresh session
 
 **Priority:** P1 (test-design-epic-chat-core.md coverage matrix)
-**Linked automated test:** `CHAT-E2E-006` — designed, not yet automated
+**Linked automated test:** `CHAT-E2E-006` (tests/specs/chat/new-chat.spec.ts)
 **Linked risk(s):** —
 
 ## Preconditions
@@ -23,10 +23,10 @@ A fresh chat session is presented — the "How can i help you today!" prompt sta
 
 ## Status
 
-Not Run
+Pass (weaker than full scope — see Notes)
 
 ## Notes
 
-**Designed, not yet automated.** This scenario exists in `_bmad-output/test-artifacts/test-design-epic-chat-core.md`'s coverage matrix but has no corresponding automated test yet.
+Automation status: Automated (passing) — `tests/specs/chat/new-chat.spec.ts`. Requires `DEVICE_UDID` and, on the emulator, `APP_NO_RESET=true` (self-skips otherwise). Verified against the emulator on 2026-08-07.
 
-Note that a fresh app launch already lands on this same empty prompt state (observed repeatedly during exploration), so verifying "New chat" meaningfully requires starting from a session that already has visible conversation content — otherwise the before/after states are indistinguishable and the case proves nothing. Sending a message first to create that content would make this a cost-triggering scenario under R8; an alternative is to run it immediately after CHAT-TC-002 or CHAT-TC-019, reusing conversation content that already exists rather than generating more.
+**This automation is deliberately weaker than the scenario's full intent, and that gap is still open.** It confirms "New chat" doesn't crash and lands on the expected empty-prompt screen — it does **not** confirm it resets away from visible prior content, which is the more meaningful half of "starts a fresh session." Live exploration on 2026-08-07 found that reusing existing conversation content (as this note originally suggested) doesn't work as a substitute the way expected: opening a past conversation from the Chats history list routes to a separate detail screen (its own Back control and an "Incognito chat" toggle, confirmed live — no hamburger trigger there), not the home screen's own inline chat state. Proving the reset behavior properly still requires either a fresh message send (R8 cost) or further exploration of whether a past conversation can be made the home screen's active session. Left as a known gap rather than worked around.

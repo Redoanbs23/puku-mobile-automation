@@ -36,6 +36,47 @@ class SettingsScreen extends BaseScreen {
     return this.byContentDesc('Log out');
   }
 
+  get settingsHeader(): ChainablePromiseElement {
+    return this.byContentDesc('Settings');
+  }
+
+  /**
+   * Same compound content-desc pattern as profileRow ("Haptic
+   * feedback\nHaptic feedback"). Reading this element's `checked`
+   * attribute reflects the toggle's current state, confirmed live on
+   * 2026-08-07 — it mirrors the value of its own nested Switch child (see
+   * hapticFeedbackSwitch) even though this outer node isn't the tap
+   * target itself.
+   */
+  get hapticFeedbackRow(): ChainablePromiseElement {
+    return $('//android.widget.Switch[contains(@content-desc, "Haptic feedback")]');
+  }
+
+  /**
+   * The actual tappable switch knob is a separate, unlabeled child node
+   * nested under hapticFeedbackRow (content-desc="", confirmed live on
+   * 2026-08-07) — tapping the parent row's label area does nothing; only
+   * this specific child toggles the state. Matched structurally by
+   * parent-child XPath rather than a coordinate tap, since the
+   * relationship (not just a fixed pixel position) is what's stable here.
+   */
+  get hapticFeedbackSwitch(): ChainablePromiseElement {
+    return $('//android.widget.Switch[contains(@content-desc, "Haptic feedback")]/android.widget.Switch');
+  }
+
+  /**
+   * Confirmed live on 2026-08-07: this is NOT a working toggle today —
+   * tapping it shows a "Notifications action placeholder" message and
+   * changes no persistent state (no navigation, no checked attribute to
+   * flip; unlike hapticFeedbackRow this renders as a plain Button, not a
+   * Switch). Treat this as the app's current real behavior, not a test
+   * gap — CHAT-E2E-010 only asserts that tapping it doesn't crash the
+   * app, not that it toggles anything.
+   */
+  get notificationsRow(): ChainablePromiseElement {
+    return $('//android.widget.Button[contains(@content-desc, "Notifications")]');
+  }
+
   async tapHamburgerMenuTrigger(): Promise<void> {
     await driver
       .action('pointer', { parameters: { pointerType: 'touch' } })
@@ -56,6 +97,14 @@ class SettingsScreen extends BaseScreen {
 
   async tapLogOut(): Promise<void> {
     await this.logOutButton.click();
+  }
+
+  async tapHapticFeedbackToggle(): Promise<void> {
+    await this.hapticFeedbackSwitch.click();
+  }
+
+  async tapNotificationsRow(): Promise<void> {
+    await this.notificationsRow.click();
   }
 
   /**

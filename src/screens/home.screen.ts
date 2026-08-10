@@ -39,6 +39,49 @@ class HomeScreen extends BaseScreen {
   }
 
   /**
+   * Opened by tapping modelSelector. Confirmed via live exploration
+   * against the emulator's logged-in session on 2026-08-07: the closed
+   * selector shows only one active model, but the opened dialog lists
+   * several concurrently-available ones. As of that exploration,
+   * puku-ai-2.7, puku-ai-2.8, and Opus 4.8 all appear as separate
+   * selectable entries at the same time — this is not a simple "2.7
+   * replaced by 2.8" drift, both versions coexist. "Select model" is the
+   * dialog's own stable header text, unrelated to any model name.
+   */
+  get modelSelectorDialogHeader(): ChainablePromiseElement {
+    return this.byContentDesc('Select model');
+  }
+
+  /**
+   * Matches any listed option from the "puku-ai" model family. Prefix-only,
+   * same version-drift tolerance as modelSelector itself — does not pin an
+   * exact version, and resolves to whichever matching entry appears first
+   * if more than one is listed (fine for an existence/displayed check).
+   */
+  get pukuAiModelOption(): ChainablePromiseElement {
+    return $('//android.view.View[contains(@content-desc, "puku-ai")]');
+  }
+
+  /**
+   * Matches any listed option from the "Opus" model family. Same
+   * prefix-only reasoning as pukuAiModelOption.
+   */
+  get opusModelOption(): ChainablePromiseElement {
+    return $('//android.view.View[contains(@content-desc, "Opus")]');
+  }
+
+  /**
+   * The darkened area behind the model selector dialog, above where the
+   * dialog itself renders. Tapping it is the dialog's own built-in
+   * "tap outside to dismiss" surface — confirmed live on 2026-08-07 that
+   * tapping it closes the dialog and returns cleanly to the home screen,
+   * same as how a real user would dismiss it.
+   */
+  get modelSelectorScrim(): ChainablePromiseElement {
+    return this.byContentDesc('Scrim');
+  }
+
+  /**
    * No content-desc on this element (confirmed via the 2026-08-04 dump —
    * content-desc="" on the raw EditText node). Matched structurally by
    * class + hint text instead of the usual accessibility-id discipline.
@@ -85,6 +128,14 @@ class HomeScreen extends BaseScreen {
 
   async waitUntilDisplayed(timeout = 10000): Promise<void> {
     await this.waitForElement(this.chatPromptHeading, timeout);
+  }
+
+  async tapModelSelector(): Promise<void> {
+    await this.modelSelector.click();
+  }
+
+  async dismissModelSelector(): Promise<void> {
+    await this.modelSelectorScrim.click();
   }
 
   /**
