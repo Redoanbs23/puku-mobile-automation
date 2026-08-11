@@ -1,0 +1,16 @@
+# Any change to CI/CD workflow files requires review, per ADR-007's
+# R17 mitigation control #4 (docs/adr/ADR-007-ci-pre-authenticated-snapshot-strategy.md).
+#
+# This exists specifically to prevent a well-intentioned future edit
+# (e.g. someone "fixing" a caching issue) from silently reintroducing
+# pull_request_target or otherwise weakening the trigger restrictions
+# that keep this public repo safe to run snapshot-based CI on.
+#
+# NOTE: this file alone does not enforce anything — "Require review
+# from Code Owners" must also be enabled under repo Settings > Branches
+# > branch protection rules for the target branch. That's a manual
+# GitHub UI step this file cannot perform.
+#
+# @Redoanbs23 inferred from the git remote (github.com/Redoanbs23/...).
+# Update if a different reviewer/team should own this instead.
+/.github/workflows/ @Redoanbs23

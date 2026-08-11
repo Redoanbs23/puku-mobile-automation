@@ -213,3 +213,17 @@ A one-hour autonomous session tasked with implementing chat-core's not-yet-autom
 3. Debug `CHAT-E2E-017`'s remaining failure (`chatInputField` not found after the portrait-lock case is handled) — flagged, not yet investigated.
 4. Commit the 18 pending files (2 new screen objects, 9 new spec files, 8 `CHAT-TC-*.md` updates) once `CHAT-E2E-017` is resolved or explicitly deferred.
 5. Carried forward, unchanged: R13 exploration pass, R10 chat-deletion investigation, the `00-apk-reconnaissance.md`/ADR-numbering/`env.ts` cleanup items from 2026-08-06.
+
+---
+
+## 2026-08-10
+
+PUKU updated to build `1.0.3` (`versionCode=9`) on the physical device (`RF8T802226Y`) between sessions — not something this automation triggered, an update that just happened to land. Re-ran the full 13-scenario suite against it (`LOGIN-E2E-002`, `AUTH-E2E-015/016`, `CHAT-E2E-001/003/004/006/007/009/010/011/012/013`; `CHAT-E2E-002` deliberately excluded, R8) and got an identical result to the pre-update run: **13/13 passed, zero regressions.**
+
+This is the first confirmed case of the project's locator strategy surviving a real app update rather than a same-build re-run — directly relevant evidence for **R4** (content-desc exposure can regress silently on updates; it didn't, this time) and **R5** (build/version drift risk; the exact version now under test is recorded here: `1.0.3` / `versionCode=9`). Worth re-running this same suite again on the *next* update rather than treating one clean pass as a standing guarantee — R4's risk is that it regresses *silently*, so this needs to keep being checked, not just checked once.
+
+**Priority shift, Redoan's explicit decision:** CI infrastructure work (building the pre-authenticated CI emulator snapshot per the CI/CD readiness analysis) now takes priority over the remaining auth-login P0 stubs (`LOGIN-E2E-005`/`008`). This is a deliberate reprioritization, not an abandonment of the sequencing plan agreed with Murat.
+
+**iOS support is now a confirmed near-term priority**, not the "not now" call Murat made when the ios-platform epic was first sketched. Two things changed since then: PUKU is a Flutter app, cross-platform by design, and Redoan now has an iPhone 11 test device plus is coordinating with the app team for iOS build access. Sequencing stands: Android CI/CD work (this session's focus) proceeds first as planned, and iOS automation becomes the next major front once Android CI is stable — not indefinitely deferred, but not started before Android CI lands either.
+
+The ios-platform epic itself remains **not formally opened** — still a sketch, not a `test-design-epic-ios-platform.md`. One correction to that sketch worth recording now rather than letting it go stale further: its risks were tentatively numbered R16–R21 at the time, but R16–R18 have since been actually claimed by `ADR-007`'s CI-snapshot risk assessment (a real, committed decision — `docs/adr/ADR-007-ci-pre-authenticated-snapshot-strategy.md`), not by ios-platform. When ios-platform is formally opened, its risk register needs fresh numbering starting from whatever's actually landed by then (R19 onward, as of this entry), not the original R16–R21 sketch.

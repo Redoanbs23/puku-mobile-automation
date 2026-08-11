@@ -1,0 +1,116 @@
+name: CI (authenticated snapshot)
+
+# Stage 2 of the two-stage pipeline — deliberately its OWN workflow
+# file, not a second job in ci.yml. Per ADR-007's R17 mitigation
+# control #1, this workflow must never run on pull_request or
+# pull_request_target — this file enforces that categorically, by
+# construction, rather than via a conditional on a shared trigger:
+#
+#   on: workflow_dispatch
+#
+# is this workflow's ONLY trigger. There is no push/pull_request entry
+# anywhere below for a future edit to accidentally activate — a
+# conditional (`if: github.event_name == 'workflow_dispatch'`) guarding
+# a job in a shared-trigger workflow would also achieve this, but relies
+# on that condition never being weakened by a later change. A dedicated
+# trigger-less-of-anything-else file has no such condition to weaken;
+# the only way to make this run on a PR event is to add one here, which
+# is exactly the kind of change CODEOWNERS review (ADR-007 control #4)
+# exists to catch.
+#
+# See docs/adr/ADR-007-ci-pre-authenticated-snapshot-strategy.md for
+# full context (R16/R17/R18) and ci.yml for stage 1.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  logged-in-state-suite:
+    name: Logged-in-state suite (pre-authenticated snapshot)
+    runs-on: macos-latest
+    # This Environment gates the job behind a required manual approval.
+    # The Environment itself ("ci-pre-authenticated-snapshot") must be
+    # created in repo Settings > Environments, with a required reviewer
+    # configured there — that's a manual GitHub UI step this YAML cannot
+    # perform. Until it exists, referencing it here will cause this job
+    # to fail to start rather than silently skip the approval gate.
+    environment: ci-pre-authenticated-snapshot
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # Matches package.json's "engines": { "node": ">=24" } — kept
+          # in sync with ci.yml. See that file's comment re: @types/node
+          # not being a reliable signal for the runtime version.
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Appium UiAutomator2 driver
+        # Kept in sync with ci.yml — see that file's comment: the earlier
+        # "check installed state first" approach didn't reliably detect
+        # it and still failed the job. `|| true` treats this step as
+        # successful regardless of exit code, on the unverified assumption
+        # that the dominant failure mode is "already installed" (harmless)
+        # rather than a real error. A genuine failure here would be
+        # silently swallowed and only surface later, more confusingly, at
+        # test-run time.
+        run: npx appium driver install uiautomator2 || true
+
+      # PLACEHOLDER — per ADR-007, the pre-authenticated snapshot does
+      # not exist yet. This step deliberately fails closed rather than
+      # falling through to a vanilla emulator boot, which would produce
+      # a confusing OAuth failure that looks like AUTH-E2E-015's known
+      # bug instead of "this isn't wired up yet." Do not implement the
+      # real fetch mechanism until R16/R17's storage and access-control
+      # mitigations (private, non-repo storage location; environment-
+      # gated credential) are actually in place, not just this workflow.
+      - name: Restore pre-authenticated emulator snapshot (PLACEHOLDER — not implemented)
+        run: |
+          echo "::error::No snapshot fetch mechanism is wired up yet. Per ADR-007," \
+               "this must not be implemented until the snapshot's storage location" \
+               "and access credential are finalized (R16/R17 mitigations)."
+          exit 1
+
+      # PLACEHOLDER — depends entirely on the fetch step above. Also
+      # flagging a real open question: reactivecircus/android-emulator-
+      # runner boots a fresh AVD by default; whether it can boot FROM a
+      # restored snapshot state (vs. a plain `emulator -avd ... -snapshot`
+      # invocation managed ourselves) needs to be confirmed once the
+      # snapshot's actual artifact format is decided. Not assumed here.
+      - name: Boot emulator from restored snapshot state (PLACEHOLDER — not implemented)
+        run: |
+          echo "::error::Emulator boot-from-snapshot is not implemented — depends on" \
+               "the restore step above and on confirming how the chosen emulator" \
+               "action (or a manual 'emulator -avd ... -snapshot' invocation) loads" \
+               "a pre-baked state rather than a fresh AVD."
+          exit 1
+
+      - name: Run logged-in-state suite
+        env:
+          APP_NO_RESET: 'true'
+        run: |
+          npm test -- --mochaOpts.grep="AUTH-E2E-016|CHAT-E2E-001|CHAT-E2E-003|CHAT-E2E-004|CHAT-E2E-006|CHAT-E2E-007|CHAT-E2E-009|CHAT-E2E-010|CHAT-E2E-011|CHAT-E2E-012|CHAT-E2E-013"
+        # AUTH-E2E-015 and CHAT-E2E-002 are intentionally excluded from
+        # this grep — AUTH-E2E-015 per ADR-006 (device-dependent, cannot
+        # run in CI), CHAT-E2E-002 per R8 (real inference cost/ToS
+        # exposure on every execution — must never run on a repeat
+        # trigger). Do not add either to this pattern.
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logged-in-state-suite-results
+          path: |
+            test-results/junit/**
+            allure-results/**
+          if-no-files-found: warn
