@@ -235,3 +235,37 @@ The ios-platform epic itself remains **not formally opened** — still a sketch,
 ### Note
 
 Branch protection's "require approvals" was temporarily disabled to merge PR #1 (solo maintainer, no second reviewer available today) and re-enabled immediately after merge. Future PRs should get a real second reviewer now that this is a team project — this exception should not be repeated.
+
+---
+
+## 2026-08-11 (session 2)
+
+### Session Summary
+
+Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-triggered workflow (`ci-on-app-release.yml`) reviewed and merged, the dispatch step added to the app repo's Build workflow (with a real copy-paste data-loss incident caught and fixed), and Stage 1's APK-delivery placeholder in `ci.yml` implemented for real. First end-to-end attempt surfaced a genuine blocker outside this repo's control — the app repo's Build workflow has literally never run — rather than a bug in anything built today. Branch protection's "require approvals" was disabled a second time, same solo-maintainer exception as this morning's entry, but only for PR #1; PR #2 is deliberately waiting on a real second reviewer instead.
+
+### Chronological Log
+
+1. **Set up the cross-repo trigger's credentials** — `AUTOMATION_DISPATCH_TOKEN` created in the app repo (`puku-app/puku-app-flutter`, classic token) and `APP_REPO_READ_TOKEN` created in this repo (classic token). Fine-grained tokens were attempted first for both but blocked by org-level restrictions on `puku-app`; not pursued further given time pressure. Flagged as debt, not solved.
+
+2. **Built and reviewed `.github/workflows/ci-on-app-release.yml`** — listens for a `puku-app-released` `repository_dispatch` event, downloads the APK with URL-prefix validation before sending credentials (defends against a compromised `AUTOMATION_DISPATCH_TOKEN` redirecting where `APP_REPO_READ_TOKEN` gets sent), routes event payload data through `env:` rather than direct `${{ }}` interpolation (script-injection defense). Merged via **PR #1**, alongside the original two-stage pipeline.
+
+3. **Added the dispatch step to the app repo's `release.yml` (Build workflow)** via a branch (`add-automation-trigger`) and **PR #58** on that separate repo. Real incident during this step: a copy-paste into GitHub's web editor silently dropped two blocks of existing YAML — the Upload Artifacts step's `with:`/`name: Releases` block, and the Check if Tag Exists step's `run:`/if-else block. Caught only by asking for the full file back and diffing it character-by-character against the known-correct original, not by trusting the paste had worked. Fixed in a follow-up commit, reverified the same way. **Lesson: always re-fetch and re-verify file content after a web-editor paste — don't assume it landed correctly.** Requested review from `smrefat02` before merging; still pending as of this entry.
+
+4. **Implemented Stage 1's APK-delivery placeholder in `ci.yml`** — fetches the latest release from `puku-app/puku-app-flutter` via GitHub's API, extracts the `app-dev-release.apk` asset's authenticated download URL, downloads with the same defensive patterns as `ci-on-app-release.yml` (prefix validation before sending credentials, `env:`-routed interpolation). **PR #2** on `puku-mobile-automation`.
+
+5. **Real finding on the first end-to-end test**: the app repo's Build workflow (`release.yml`) has **0 workflow runs, ever** — confirmed via GitHub's Actions UI. It only triggers on a version-tag push, and no one has ever pushed one. This is the actual remaining blocker for both new workflows (`ci-on-app-release.yml` and Stage 1's APK fetch) — not a bug in anything built today. Both fail correctly and loudly ("asset not found") rather than silently, exactly as designed. Sent a message to the app team requesting a real tag push to unblock end-to-end verification.
+
+6. **Branch protection note (second occurrence today)** — temporarily disabled "require approvals" a second time to merge PR #1 (same solo-maintainer exception as the earlier entry today), re-enabled after. PR #2 is pending real review this time — waiting on a second team member — rather than repeating the exception, now that a reviewer is actually available.
+
+### Key Decisions
+
+- **Cross-repo dispatch chosen over polling** for the release-triggered pipeline.
+- **Classic tokens used over fine-grained**, due to org-level restrictions on `puku-app` blocking the fine-grained attempt — tracked as minor security debt, not a merge blocker.
+- **Stage 1 and Stage 2 both correctly fail closed** rather than silently succeed when the APK/release doesn't exist yet — confirmed by today's real-world test against the app repo's never-run Build workflow.
+
+### Next Steps
+
+1. Waiting on the app team to push a real version tag (unblocks the app repo's Build workflow, which has never run).
+2. Waiting on `smrefat02`'s review of PR #58 on the app repo.
+3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
