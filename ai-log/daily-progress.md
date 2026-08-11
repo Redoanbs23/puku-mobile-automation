@@ -227,3 +227,11 @@ This is the first confirmed case of the project's locator strategy surviving a r
 **iOS support is now a confirmed near-term priority**, not the "not now" call Murat made when the ios-platform epic was first sketched. Two things changed since then: PUKU is a Flutter app, cross-platform by design, and Redoan now has an iPhone 11 test device plus is coordinating with the app team for iOS build access. Sequencing stands: Android CI/CD work (this session's focus) proceeds first as planned, and iOS automation becomes the next major front once Android CI is stable — not indefinitely deferred, but not started before Android CI lands either.
 
 The ios-platform epic itself remains **not formally opened** — still a sketch, not a `test-design-epic-ios-platform.md`. One correction to that sketch worth recording now rather than letting it go stale further: its risks were tentatively numbered R16–R21 at the time, but R16–R18 have since been actually claimed by `ADR-007`'s CI-snapshot risk assessment (a real, committed decision — `docs/adr/ADR-007-ci-pre-authenticated-snapshot-strategy.md`), not by ios-platform. When ios-platform is formally opened, its risk register needs fresh numbering starting from whatever's actually landed by then (R19 onward, as of this entry), not the original R16–R21 sketch.
+
+---
+
+## 2026-08-11
+
+### Note
+
+Branch protection's "require approvals" was temporarily disabled to merge PR #1 (solo maintainer, no second reviewer available today) and re-enabled immediately after merge. Future PRs should get a real second reviewer now that this is a team project — this exception should not be repeated.
