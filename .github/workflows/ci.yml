@@ -8,10 +8,12 @@ name: CI
 # why the split matters.
 #
 # This workflow runs on every push and pull_request, including from
-# forks. That's safe by GitHub's default behavior of withholding
-# repository/environment secrets from pull_request runs triggered by
-# forks — though this job needs no secrets at all regardless, so that
-# protection isn't even load-bearing here.
+# forks. It DOES use a secret — APP_REPO_READ_TOKEN, read-only access
+# to the private app repo, needed by the APK-fetch step below. That's
+# still safe on fork-triggered pull_request runs specifically because
+# of GitHub's default behavior of withholding repository/environment
+# secrets from those runs: a fork PR's run simply fails at the
+# APK-fetch step (no token available to it), not silently leaks one.
 #
 # Per ADR-007 control #4, changes to this file require CODEOWNERS
 # review.
@@ -73,21 +75,61 @@ jobs:
         # failures ever show up without an obvious cause.
         run: npx appium driver install uiautomator2 || true
 
-      # NOTE: PUKU's APK is gitignored (apk/, *.apk) and is not fetched
-      # anywhere in this workflow yet. This step is a placeholder — it
-      # fails loudly and clearly rather than letting later steps fail
-      # confusingly against a missing APK. Replace with a real source
-      # (private artifact storage, a release download, etc.) before
-      # this job can actually pass end-to-end. Flagged, not solved, by
-      # this workflow — matches the CI/CD readiness analysis's own
-      # "APK delivery mechanism missing" finding.
-      - name: Obtain PUKU APK (PLACEHOLDER — not implemented)
+      # PUKU's APK is gitignored (apk/, *.apk) and pulled from the latest
+      # release on the app's own (separate, private) repo. Same
+      # APP_REPO_READ_TOKEN secret as ci-on-app-release.yml — read access
+      # to that repo only, distinct from AUTOMATION_DISPATCH_TOKEN (see
+      # that file's header comment).
+      - name: Fetch latest PUKU release metadata
+        id: latest_release
+        env:
+          APP_REPO_READ_TOKEN: ${{ secrets.APP_REPO_READ_TOKEN }}
         run: |
-          echo "::error::PUKU_APK_PATH has no source in CI yet. The APK is" \
-               "gitignored and not fetched by this workflow. This step is a" \
-               "deliberate placeholder — wire a real source (private artifact" \
-               "storage, release download, etc.) before this job can pass."
-          exit 1
+          RELEASE_JSON=$(curl -sSfL \
+            -H "Authorization: Bearer $APP_REPO_READ_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/puku-app/puku-app-flutter/releases/latest")
+
+          # The asset's "url" field is the authenticated API download
+          # endpoint (works with Accept: application/octet-stream below).
+          # Deliberately not "browser_download_url" — on a private repo
+          # that only resolves through a browser session, not curl+token.
+          ASSET_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name == "app-dev-release.apk") | .url')
+
+          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" == "null" ]; then
+            echo "::error::No asset named 'app-dev-release.apk' found on the latest release of puku-app/puku-app-flutter. Refusing to continue — check that the release includes that asset."
+            exit 1
+          fi
+
+          echo "asset_url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download PUKU APK from latest release
+        env:
+          APK_ASSET_URL: ${{ steps.latest_release.outputs.asset_url }}
+          APP_REPO_READ_TOKEN: ${{ secrets.APP_REPO_READ_TOKEN }}
+        run: |
+          # Refuse to send the token anywhere but the expected app repo's
+          # release-assets API endpoint, regardless of what the prior step
+          # produced — same defensive bound as ci-on-app-release.yml's
+          # apk_url prefix check.
+          EXPECTED_PREFIX="https://api.github.com/repos/puku-app/puku-app-flutter/releases/assets/"
+          case "$APK_ASSET_URL" in
+            "$EXPECTED_PREFIX"*) ;;
+            *)
+              echo "::error::asset url ('$APK_ASSET_URL') does not match the expected prefix ($EXPECTED_PREFIX) — refusing to send credentials to an unexpected host."
+              exit 1
+              ;;
+          esac
+
+          mkdir -p apk
+          # Path matches config/environments/local.ts's DEFAULT_APK_PATH
+          # (apk/puku.apk, relative to repo root / process.cwd()) — no
+          # PUKU_APK_PATH override needed as long as the file lands here.
+          curl -sSfL \
+            -H "Authorization: Bearer $APP_REPO_READ_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "$APK_ASSET_URL" \
+            -o apk/puku.apk
 
       - name: Run LOGIN-E2E-002 against a vanilla emulator
         uses: reactivecircus/android-emulator-runner@v2
