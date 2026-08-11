@@ -1,0 +1,128 @@
+name: CI (on app release)
+
+# Triggered by a `puku-app-released` repository_dispatch event fired from
+# the PUKU app's own (separate, private) repo — its Build workflow's final
+# step, after a release tag is built and uploaded. Not part of this repo;
+# see that repo's own workflow for the sending side.
+#
+# repository_dispatch requires a valid token to fire (AUTOMATION_DISPATCH_TOKEN,
+# held in the app repo's secrets, scoped to write-dispatch access on THIS
+# repo only) — unlike an anonymous fork PR, this trigger can't be reached
+# without possessing that credential. On that basis this runs the same
+# emulator-safe suite as ci.yml's Stage 1. It does NOT touch the
+# pre-authenticated snapshot — ci-authenticated.yml stays workflow_dispatch-
+# only, per ADR-007 control #1. Whether a repository_dispatch trigger
+# should ever be extended to reach that authenticated suite is a separate,
+# not-yet-made decision — not assumed here.
+#
+# Per ADR-007 control #4, changes to this file require CODEOWNERS review
+# (already covered by the existing /.github/workflows/ rule).
+
+on:
+  repository_dispatch:
+    types: [puku-app-released]
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-safe-on-release:
+    name: Lint, typecheck, and LOGIN-E2E-002 (release-triggered)
+    runs-on: macos-latest
+    steps:
+      - name: Log release event details
+        env:
+          # Routed through env: rather than interpolated directly into the
+          # script below — client_payload values originate from the
+          # dispatch payload and, in an AUTOMATION_DISPATCH_TOKEN-leaked
+          # worst case, could be attacker-influenced. env-var expansion is
+          # not re-parsed as script, unlike direct ${{ }} interpolation
+          # into a run: block, so this avoids a real injection vector.
+          RELEASE_TAG: ${{ github.event.client_payload.tag }}
+          RELEASE_COMMIT_SHA: ${{ github.event.client_payload.commit_sha }}
+        run: |
+          echo "Triggered by app release:"
+          echo "  tag: $RELEASE_TAG"
+          echo "  commit_sha: $RELEASE_COMMIT_SHA"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          # Matches package.json's "engines": { "node": ">=24" } — kept in
+          # sync with ci.yml/ci-authenticated.yml.
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Install Appium UiAutomator2 driver
+        # Kept in sync with ci.yml — see that file's comment: `|| true`
+        # accepted on the unverified assumption that the dominant failure
+        # mode is "already installed," not a real error.
+        run: npx appium driver install uiautomator2 || true
+
+      - name: Download PUKU APK from release event
+        env:
+          APK_URL: ${{ github.event.client_payload.apk_url }}
+          APP_REPO_READ_TOKEN: ${{ secrets.APP_REPO_READ_TOKEN }}
+        run: |
+          # PLACEHOLDER DEPENDENCY: APP_REPO_READ_TOKEN does not exist yet
+          # in this repo's secrets (Settings > Secrets and variables >
+          # Actions) — a manual step this YAML cannot perform, same
+          # pattern as ci-authenticated.yml's Environment setup note. It
+          # must be a token with read access to the private PUKU app repo
+          # — separate from AUTOMATION_DISPATCH_TOKEN, which lives in that
+          # app repo and only needs write-dispatch access to THIS repo.
+          # This step will fail until that secret is added.
+
+          # Refuse to send the token anywhere but the expected app repo's
+          # release-asset URL, regardless of what the payload claims —
+          # bounds APP_REPO_READ_TOKEN's exposure even if apk_url were
+          # ever attacker-influenced (see file header re: AUTOMATION_
+          # DISPATCH_TOKEN leaking).
+          EXPECTED_PREFIX="https://github.com/puku-app/puku-app-flutter/releases/download/"
+          case "$APK_URL" in
+            "$EXPECTED_PREFIX"*) ;;
+            *)
+              echo "::error::apk_url ('$APK_URL') does not match the expected prefix ($EXPECTED_PREFIX) — refusing to send credentials to an unexpected host."
+              exit 1
+              ;;
+          esac
+
+          mkdir -p apk
+          # Path matches config/environments/local.ts's DEFAULT_APK_PATH
+          # (apk/puku.apk, relative to repo root / process.cwd()) — no
+          # PUKU_APK_PATH override needed as long as the file lands here.
+          curl -sSfL \
+            -H "Authorization: Bearer $APP_REPO_READ_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "$APK_URL" \
+            -o apk/puku.apk
+
+      - name: Run LOGIN-E2E-002 against a vanilla emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          script: npm test -- --mochaOpts.grep="LOGIN-E2E-002"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-on-app-release-results
+          path: |
+            test-results/junit/**
+            allure-results/**
+          if-no-files-found: warn
