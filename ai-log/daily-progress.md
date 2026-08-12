@@ -269,3 +269,26 @@ Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-tr
 1. Waiting on the app team to push a real version tag (unblocks the app repo's Build workflow, which has never run).
 2. Waiting on `smrefat02`'s review of PR #58 on the app repo.
 3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
+
+---
+
+## 2026-08-12
+
+### Session Summary
+
+**First fully successful, green, end-to-end CI/CD run.** `puku-mobile-automation`'s Stage 1 (`ci.yml`) and the app repo's Build workflow (`release.yml`) both completed successfully together for the first time — closing out item 3 from 2026-08-11 (session 2)'s Next Steps. Getting here required real fixes across **two repositories** (`puku-mobile-automation` and `puku-app-flutter`), involved **several different people**, and was genuine infrastructure debugging — not a small effort.
+
+### Chronological Log (issues found and fixed today, in the order they were hit)
+
+1. **Missing `TOKEN` secret** — the app repo's Build workflow was missing a required secret; added.
+2. **Missing `.env` config files** (dev/prod/qa) — the app repo's build expected environment config files that didn't exist yet; added.
+3. **`main_dev.dart` vs `main_prod.dart` build target** — the Build workflow was pointed at the wrong Flutter entrypoint for the release variant being built; corrected.
+4. **`--dart-define-from-file` flag** — required by the Flutter build to pick up the `.env` config above; was missing from the build command, added.
+5. **Keystore corruption** — the app repo's signing keystore was corrupted; fixed by the app team (not this repo's fix to make).
+6. **macOS HVF unsupported on GitHub-hosted ARM runners** — `ci.yml`'s `emulator-safe` job originally ran on `macos-latest`; hardware virtualization (HVF) needed by the Android emulator isn't available on GitHub's ARM macOS hosts. Fixed by switching the job to `ubuntu-latest` with an explicit "Enable KVM group perms" step (the standard `reactivecircus/android-emulator-runner` pattern), with `arch` reverted to `x86_64` to match the Linux runner's actual host architecture.
+7. **Emulator AVD name mismatch** — the emulator step wasn't told which AVD to use; added `avd-name: Pixel_7`, matching `config/environments/local.ts`'s existing `deviceName` default so CI and local runs stay consistent.
+8. **`sh.puku.app` vs `sh.puku.app.dev` package name mismatch** — CI fetches `app-dev-release.apk` (the dev build variant), which installs under package `sh.puku.app.dev` (versionCode 2, versionName `1.0.2-dev`), not `sh.puku.app` — the package name confirmed against the prod build during all of the earlier local/physical-device exploration. Root-caused via a temporary `aapt dump badging` diagnostic step added to `ci.yml`, then fixed properly (not just patched around): `config/environments/local.ts` and `config/wdio.android.conf.ts` now read `appium:appPackage` from a new `APP_PACKAGE` env var, defaulting to `sh.puku.app` (unchanged for local/physical-device testing) with `ci.yml`'s emulator step overriding it to `sh.puku.app.dev` for CI specifically. The diagnostic step was removed once the real value was confirmed and the fix landed.
+
+### Key Decisions
+
+- **This was cross-team, cross-repo work, not a quick fix.** Issues 1–5 were in the app repo (`puku-app-flutter`) and required the app team's own fixes (including the keystore, which only they could resolve); issues 6–8 were in this repo's CI config. Recorded together here because they were all genuine blockers to the *same* end-to-end goal, and the effort involved shouldn't be understated by splitting it silently across two logs.
