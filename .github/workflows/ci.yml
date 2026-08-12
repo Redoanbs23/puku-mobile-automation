@@ -139,6 +139,40 @@ jobs:
             "$APK_ASSET_URL" \
             -o apk/puku.apk
 
+      # TEMPORARY DIAGNOSTIC — not a fix. Answers one question: does
+      # app-dev-release.apk actually install under package `sh.puku.app`,
+      # the value hardcoded in config/wdio.android.conf.ts's
+      # appium:appPackage? Local exploration all day confirmed sh.puku.app
+      # only against app-prod-release.apk — a different build variant —
+      # so that assumption is unverified for the dev release CI fetches.
+      # No explicit Android SDK install step exists anywhere in this
+      # workflow (checked: no sdkmanager/ANDROID_HOME/build-tools
+      # references in ci.yml, ci-on-app-release.yml, or
+      # ci-authenticated.yml) — whatever's here comes from ubuntu-latest's
+      # runner image, not anything this job sets up. The exact build-tools
+      # version bundled there isn't knowable ahead of time from outside a
+      # live run, so this resolves the highest installed version at
+      # runtime rather than hardcoding a guess that could silently go
+      # stale on a runner-image update. Remove this step once the real
+      # package name is known and appium:appPackage is fixed accordingly.
+      - name: DIAGNOSTIC - dump APK package name via aapt
+        run: |
+          if [ -z "$ANDROID_HOME" ]; then
+            echo "::error::ANDROID_HOME is not set in this environment — cannot locate aapt. This itself is a finding worth recording."
+            exit 1
+          fi
+
+          AAPT_PATH=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt -type f 2>/dev/null | sort -V | tail -1)
+
+          if [ -z "$AAPT_PATH" ]; then
+            echo "::error::No aapt binary found under \$ANDROID_HOME/build-tools ($ANDROID_HOME/build-tools). Installed build-tools versions:"
+            ls -1 "$ANDROID_HOME/build-tools" 2>&1 || echo "(build-tools directory does not exist)"
+            exit 1
+          fi
+
+          echo "Using aapt at: $AAPT_PATH"
+          "$AAPT_PATH" dump badging apk/puku.apk | grep package
+
       - name: Run LOGIN-E2E-002 against a vanilla emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
