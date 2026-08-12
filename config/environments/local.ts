@@ -27,6 +27,6 @@ function detectPlatformVersion(deviceUdid: string): string | undefined {
 export const localEnvironment = {
   deviceName: process.env.DEVICE_NAME ?? 'Pixel_7',
   platformVersion: process.env.PLATFORM_VERSION ?? (udid && detectPlatformVersion(udid)) ?? '14',
-  appPath: process.env.PUKU_APK_PATH ?? DEFAULT_APK_PATH,
+  appPath: process.env.PUKU_APK_PATH?.trim() || DEFAULT_APK_PATH,
   udid,
 };

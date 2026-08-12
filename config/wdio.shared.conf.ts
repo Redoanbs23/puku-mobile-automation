@@ -1,6 +1,8 @@
 import 'dotenv/config';
+import path from 'node:path';
 import type { Options } from '@wdio/types';
 import { onTestStart, onTestFailure } from '../src/hooks/failure-capture.js';
+import { resetRunSummary, finalizeRunSummary } from '../src/hooks/run-summary.js';
 
 export const sharedConfig: Partial<Options.Testrunner> = {
   runner: 'local',
@@ -28,11 +30,15 @@ export const sharedConfig: Partial<Options.Testrunner> = {
         disableWebdriverScreenshotsReporting: false,
       },
     ],
+    // Absolute path required — relative "./..." is wrongly resolved as @wdio/...-reporter
+    [path.resolve(process.cwd(), 'src/hooks/run-summary.ts'), {}],
   ],
   mochaOpts: {
     ui: 'bdd',
     timeout: 60000,
   },
+  onPrepare: resetRunSummary,
+  onComplete: finalizeRunSummary,
   beforeTest: onTestStart,
   afterTest: onTestFailure,
 };

@@ -1,4 +1,5 @@
 import { BaseScreen } from './base.screen.js';
+import { scalePoint, scaleRect } from '../utils/device-scale.js';
 
 /**
  * Home screen's hamburger menu trigger has no content-desc, resource-id,
@@ -6,10 +7,8 @@ import { BaseScreen } from './base.screen.js';
  * 2026-08-06) — a genuine gap in the Flutter semantics tree, the same
  * class of issue R4 in the test design anticipated (see
  * ai-log/lessons-learned.md). A coordinate-based tap is the only way to
- * reach it today. This is fragile: these coordinates are tied to this
- * device's screen resolution (RF8T802226Y, 1080x2408) and will not
- * generalize to other screen sizes/DPIs. Replace with a real locator if
- * PUKU ever exposes one on this element.
+ * reach it today. Baseline pixels are RF8T802226Y (1080x2408); taps are
+ * scaled via device-scale.ts so other screen sizes keep the same ratios.
  */
 const HAMBURGER_MENU_TRIGGER_X = 112;
 const HAMBURGER_MENU_TRIGGER_Y = 178;
@@ -17,8 +16,20 @@ const HAMBURGER_MENU_TRIGGER_Y = 178;
 const SETTINGS_SCROLL_REGION = { left: 100, top: 500, width: 880, height: 1600 };
 
 class SettingsScreen extends BaseScreen {
+  /**
+   * Previous (RF8T802226Y): accessibility id "P".
+   * New (Honor / other accounts): 1-letter sibling of "New chat".
+   * Getter unions both so CHAT-E2E-003 display checks work on either device.
+   */
   get profileAvatarButton(): ChainablePromiseElement {
-    return this.byContentDesc('P');
+    return $(
+      '//*[@content-desc="P"] | //android.widget.Button[@content-desc="New chat"]/preceding-sibling::*[string-length(@content-desc)=1][1]',
+    );
+  }
+
+  /** Confirms the navigation drawer opened (stable on all devices). */
+  get drawerOpenedMarker(): ChainablePromiseElement {
+    return this.byContentDesc('Chats');
   }
 
   /**
@@ -77,18 +88,72 @@ class SettingsScreen extends BaseScreen {
     return $('//android.widget.Button[contains(@content-desc, "Notifications")]');
   }
 
+  /**
+   * Opens the drawer by tapping top-left candidates until "~Chats" appears.
+   * Single fixed/scaled point is not enough across Honor vs RF8T802226Y.
+   */
   async tapHamburgerMenuTrigger(): Promise<void> {
+    if (await this.drawerOpenedMarker.isDisplayed().catch(() => false)) {
+      return;
+    }
+
+    const { width, height } = await driver.getWindowSize();
+    const scaled = await scalePoint(HAMBURGER_MENU_TRIGGER_X, HAMBURGER_MENU_TRIGGER_Y);
+    const points = [
+      scaled,
+      { x: Math.round(width * 0.07), y: Math.round(height * 0.055) },
+      { x: Math.round(width * 0.1), y: Math.round(height * 0.07) },
+      { x: Math.round(width * 0.14), y: Math.round(height * 0.09) },
+      { x: Math.round(width * 0.05), y: Math.round(height * 0.1) },
+    ];
+
+    for (const { x, y } of points) {
+      await driver
+        .action('pointer', { parameters: { pointerType: 'touch' } })
+        .move(x, y)
+        .down()
+        .pause(100)
+        .up()
+        .perform();
+
+      try {
+        await this.drawerOpenedMarker.waitForDisplayed({ timeout: 2000 });
+        return;
+      } catch {
+        // try next candidate
+      }
+    }
+
+    await $('android=new UiSelector().clickable(true).instance(0)').click();
+    await this.drawerOpenedMarker.waitForDisplayed({ timeout: 5000 });
+  }
+
+  async tapProfileAvatar(): Promise<void> {
+    // 1) Previous — Redoan path: ~P + click
+    const previous = this.byContentDesc('P');
+    if (await previous.isDisplayed().catch(() => false)) {
+      await previous.click();
+      return;
+    }
+
+    // 2) New — any account initial beside New chat + center tap (Honor: clickable=false)
+    const avatar = $(
+      '//android.widget.Button[@content-desc="New chat"]/preceding-sibling::*[string-length(@content-desc)=1][1]',
+    );
+    await avatar.waitForDisplayed({ timeout: 10000 });
+
+    const location = await avatar.getLocation();
+    const size = await avatar.getSize();
+    const x = Math.round(location.x + size.width / 2);
+    const y = Math.round(location.y + size.height / 2);
+
     await driver
       .action('pointer', { parameters: { pointerType: 'touch' } })
-      .move(HAMBURGER_MENU_TRIGGER_X, HAMBURGER_MENU_TRIGGER_Y)
+      .move(x, y)
       .down()
       .pause(100)
       .up()
       .perform();
-  }
-
-  async tapProfileAvatar(): Promise<void> {
-    await this.profileAvatarButton.click();
   }
 
   async tapProfileRow(): Promise<void> {
@@ -114,7 +179,7 @@ class SettingsScreen extends BaseScreen {
    */
   async scrollDown(): Promise<void> {
     await driver.execute('mobile: swipeGesture', {
-      ...SETTINGS_SCROLL_REGION,
+      ...(await scaleRect(SETTINGS_SCROLL_REGION)),
       direction: 'up',
       percent: 0.9,
     });

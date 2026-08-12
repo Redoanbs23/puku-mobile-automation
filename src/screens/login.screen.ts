@@ -19,6 +19,10 @@ class LoginScreen extends BaseScreen {
     return this.byContentDesc('Enter your email');
   }
 
+  get orDivider(): ChainablePromiseElement {
+    return this.byContentDesc('OR');
+  }
+
   async waitUntilDisplayed(timeout = 10000): Promise<void> {
     await this.waitForElement(this.continueWithGoogleButton, timeout);
   }

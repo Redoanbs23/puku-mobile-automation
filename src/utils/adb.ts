@@ -83,3 +83,25 @@ export function pullFile(devicePath: string, localPath: string): void {
 export function removeDeviceFile(devicePath: string): void {
   execSync(adbCommand('shell', 'rm', '-f', devicePath));
 }
+
+export async function mobileShell(command: string, args: string[] = []): Promise<string> {
+  return String((await driver.execute('mobile: shell', { command, args })) ?? '');
+}
+
+export async function setAirplaneMode(enabled: boolean): Promise<void> {
+  try {
+    await mobileShell('cmd', ['connectivity', 'airplane-mode', enabled ? 'enable' : 'disable']);
+  } catch {
+    await mobileShell('settings', ['put', 'global', 'airplane_mode_on', enabled ? '1' : '0']);
+  }
+}
+
+export async function restoreNetwork(): Promise<void> {
+  try {
+    await setAirplaneMode(false);
+    await mobileShell('svc', ['wifi', 'enable']);
+  } catch {
+    // best effort
+  }
+  await driver.pause(2000);
+}

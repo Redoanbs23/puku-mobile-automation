@@ -1,6 +1,35 @@
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
+import { localEnvironment } from '../../config/environments/local.js';
 import { loginScreen } from '../screens/login.screen.js';
 import { oauthConsentScreen } from '../screens/oauth-consent.screen.js';
 import { homeScreen } from '../screens/home.screen.js';
+import { captureLogcat, restoreNetwork, setAirplaneMode } from '../utils/adb.js';
+import { logger } from '../utils/logger.js';
+
+const emailNotConnectedToast = () =>
+  $('//*[contains(@content-desc, "not connected")]');
+
+const APP_ID = 'sh.puku.app';
+
+const playProtectUiPatterns = [
+  '//*[contains(@text, "Play Protect")]',
+  '//*[contains(@text, "Install anyway")]',
+  '//*[contains(@text, "harmful")]',
+  '//*[contains(@text, "Blocked")]',
+  '//*[contains(@content-desc, "Play Protect")]',
+];
+
+async function scanPlayProtectUi(): Promise<string[]> {
+  const hits: string[] = [];
+  for (const pattern of playProtectUiPatterns) {
+    const el = await $(pattern);
+    if (await el.isDisplayed().catch(() => false)) {
+      hits.push(pattern);
+    }
+  }
+  return hits;
+}
 
 /**
  * Composed flows over screen objects.
@@ -14,6 +43,66 @@ import { homeScreen } from '../screens/home.screen.js';
  * for the full context and constraints.
  */
 export const authFlow = {
+  async verifySideloadedApkInstall(): Promise<void> {
+    const apkPath = localEnvironment.appPath;
+    if (!existsSync(apkPath)) {
+      throw new Error(`LOGIN-E2E-001: APK not found at ${apkPath}`);
+    }
+
+    const sha256 = createHash('sha256').update(readFileSync(apkPath)).digest('hex');
+    logger.info(`LOGIN-E2E-001 apk=${apkPath} sha256=${sha256}`);
+
+    if (await driver.isAppInstalled(APP_ID)) {
+      await driver.removeApp(APP_ID);
+    }
+
+    await driver.installApp(apkPath);
+    expect(await driver.isAppInstalled(APP_ID)).toBe(true);
+
+    await driver.activateApp(APP_ID);
+    await loginScreen.waitUntilDisplayed(30000);
+    await expect(loginScreen.continueWithGoogleButton).toBeDisplayed();
+  },
+
+  async documentPlayProtectSideloadBehavior(): Promise<void> {
+    const apkPath = localEnvironment.appPath;
+    if (!existsSync(apkPath)) {
+      throw new Error(`LOGIN-E2E-003: APK not found at ${apkPath}`);
+    }
+
+    if (await driver.isAppInstalled(APP_ID)) {
+      await driver.removeApp(APP_ID);
+    }
+
+    await driver.installApp(apkPath);
+    await driver.pause(1500);
+
+    const foregroundPkg = await driver.getCurrentPackage().catch(() => 'unknown');
+    const uiHits = await scanPlayProtectUi();
+    const logcatHit = /play protect|verify apps|harmful app|blocked by play protect/i.test(
+      captureLogcat(300),
+    );
+    const onInstaller = /packageinstaller|vending|gms/.test(foregroundPkg);
+
+    const behavior =
+      uiHits.length > 0
+        ? `ui-warning:${uiHits.length}`
+        : onInstaller
+          ? 'system-installer-foreground'
+          : logcatHit
+            ? 'logcat-mention-only'
+            : 'none-observed-adb-sideload';
+
+    logger.info(
+      `LOGIN-E2E-003 play-protect-behavior=${behavior} foreground=${foregroundPkg} apk=${apkPath}`,
+    );
+
+    expect(await driver.isAppInstalled(APP_ID)).toBe(true);
+    await driver.activateApp(APP_ID);
+    await loginScreen.waitUntilDisplayed(30000);
+    await expect(loginScreen.continueWithGoogleButton).toBeDisplayed();
+  },
+
   async attemptGoogleSignIn(): Promise<void> {
     await loginScreen.waitUntilDisplayed();
     await loginScreen.tapContinueWithGoogle();
@@ -22,6 +111,63 @@ export const authFlow = {
   async attemptEmailSignIn(): Promise<void> {
     await loginScreen.waitUntilDisplayed();
     await loginScreen.tapEnterYourEmail();
+  },
+
+  async verifyLoginDeviceCompatibility(): Promise<void> {
+    await loginScreen.waitUntilDisplayed();
+    await expect(loginScreen.continueWithGoogleButton).toBeEnabled();
+    await expect(loginScreen.enterYourEmailButton).toBeEnabled();
+  },
+
+  async verifyLoginSurvivesRotation(): Promise<void> {
+    await loginScreen.waitUntilDisplayed();
+    try {
+      await driver.setOrientation('LANDSCAPE');
+      await driver.setOrientation('PORTRAIT');
+    } catch (error) {
+      if (!(error instanceof Error && /locked programmatically/.test(error.message))) throw error;
+    }
+    await expect(loginScreen.continueWithGoogleButton).toBeDisplayed();
+  },
+
+  async observeColdStartToLogin(): Promise<void> {
+    await driver.terminateApp(APP_ID);
+    const start = Date.now();
+    await driver.activateApp(APP_ID);
+    await loginScreen.waitUntilDisplayed(30000);
+    logger.info(`LOGIN-E2E-004 cold-start-to-login: ${Date.now() - start}ms`);
+    await expect(loginScreen.continueWithGoogleButton).toBeDisplayed();
+  },
+
+  async verifyEmailNotConnectedToast(): Promise<void> {
+    await this.attemptEmailSignIn();
+    await emailNotConnectedToast().waitForDisplayed({ timeout: 5000 });
+  },
+
+  async verifyEmailToastHasNoSensitiveData(): Promise<void> {
+    await this.attemptEmailSignIn();
+    await driver.pause(500);
+    const logcat = captureLogcat(300).toLowerCase();
+    expect(logcat).not.toMatch(/bearer|password|api[_-]?key|secret/);
+  },
+
+  async verifyLoginScreenAfterEmailToast(): Promise<void> {
+    await this.attemptEmailSignIn();
+    await driver.pause(500);
+    await expect(loginScreen.continueWithGoogleButton).toBeDisplayed();
+    await expect(loginScreen.enterYourEmailButton).toBeDisplayed();
+  },
+
+  async verifyGracefulOAuthNetworkLoss(): Promise<void> {
+    try {
+      await setAirplaneMode(true);
+      await driver.pause(1500);
+      await this.attemptGoogleSignIn();
+      await driver.pause(3000);
+      await expect(loginScreen.continueWithGoogleButton).toBeDisplayed();
+    } finally {
+      await restoreNetwork();
+    }
   },
 
   /**

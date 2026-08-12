@@ -1,5 +1,6 @@
 import { BaseScreen } from './base.screen.js';
 import { typeRealText } from '../utils/real-text-input.js';
+import { scalePoint } from '../utils/device-scale.js';
 
 /**
  * Send control has no content-desc, resource-id, or text (confirmed via
@@ -8,9 +9,10 @@ import { typeRealText } from '../utils/real-text-input.js';
  * settings.screen.ts and ai-log/lessons-learned.md). Worse than the
  * hamburger's: this element does not exist at all until the chat input
  * has text, and its position depends on the on-screen keyboard being
- * open, which shifts the whole input card upward. These coordinates are
- * only valid immediately after typing into chatInputField while the
- * keyboard remains open — do not reuse them in any other state.
+ * open, which shifts the whole input card upward. Baseline pixels are
+ * RF8T802226Y (1080x2408); tapSendButton scales them to the current
+ * window. Only valid immediately after typing into chatInputField while
+ * the keyboard remains open — do not reuse them in any other state.
  */
 const SEND_BUTTON_X = 954;
 const SEND_BUTTON_Y = 1139;
@@ -149,9 +151,10 @@ class HomeScreen extends BaseScreen {
   }
 
   async tapSendButton(): Promise<void> {
+    const { x, y } = await scalePoint(SEND_BUTTON_X, SEND_BUTTON_Y);
     await driver
       .action('pointer', { parameters: { pointerType: 'touch' } })
-      .move(SEND_BUTTON_X, SEND_BUTTON_Y)
+      .move(x, y)
       .down()
       .pause(100)
       .up()
