@@ -30,15 +30,5 @@ export const androidCapabilities = {
 };
 
 export const androidServices: Options.Testrunner['services'] = [
-  [
-    'appium',
-    {
-      args: {
-        address: '127.0.0.1',
-        port: 4723,
-        // LOGIN-E2E-011 (airplane mode via mobile: shell) requires adb_shell.
-        allowInsecure: ['adb_shell'],
-      },
-    },
-  ],
+  ['appium', { args: { address: '127.0.0.1', port: 4723 } }],
 ];
