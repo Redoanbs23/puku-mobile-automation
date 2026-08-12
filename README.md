@@ -26,12 +26,11 @@ Two epics designed, both partially automated:
 | | `auth-login` | `chat-core` |
 |---|---|---|
 | Risks registered | 7 (`R1`–`R7`) | 8 new (`R8`–`R15`) |
-| Scenarios designed | 14 | 19 |
-| Scenarios scaffolded in code | 14 (all of them) | 3 |
-| — of those, passing | 3 | 3 |
-| — of those, `it.skip()` stubs | 11 | 0 |
+| Scenarios designed | 14 + 2 auth flows (`AUTH-E2E-015`/`016`) | 19 |
+| Scenarios automated in code | **16** (all `LOGIN-E2E-001`–`014` + `AUTH-E2E-015`/`016`) | 3 |
+| — of those, `it.skip()` stubs | **0** | 0 |
 
-**6 tests pass today**, all verified against a physical device: `LOGIN-E2E-002`, `AUTH-E2E-015`, `AUTH-E2E-016`, `CHAT-E2E-001`, `CHAT-E2E-002`, `CHAT-E2E-003`. 13 more `auth-login` scenarios exist as `it.skip()` scaffolds awaiting implementation. `chat-core`'s remaining 16 scenarios (P1–P3) exist only in its test-design document — not yet scaffolded into spec files at all. 6 manual test cases exist, traced 1:1 to the 6 passing automated scenarios.
+**`auth-login` is fully automated** — all 14 `LOGIN-E2E` scenarios plus OAuth login (`AUTH-E2E-015`) and logout (`AUTH-E2E-016`) are active in `tests/specs/auth/`. Five scenarios (`LOGIN-E2E-007`, `011`, `012`, `AUTH-E2E-015`, `016`) require a physical device with `DEVICE_UDID` set; the rest run on emulator or device. `LOGIN-E2E-001` and `003` uninstall/reinstall the app — run them separately from OAuth/logout tests. `chat-core`'s remaining 16 scenarios (P1–P3) exist only in its test-design document — not yet scaffolded into spec files at all.
 
 ## Architecture overview
 
@@ -41,8 +40,8 @@ Screen Object Model over WebdriverIO, with composed flows layered on top of scre
 config/           WebdriverIO config (shared / Android-Appium / environment overrides, DEVICE_UDID-aware)
 src/screens/      Screen Object Model — one class per app screen, content-desc-first locators
 src/flows/        Composed user flows over screen objects (e.g. login + OAuth consent in one call)
-src/hooks/        Test lifecycle hooks (automatic failure capture: screenshot, logcat, recording)
-src/utils/        adb helpers, logger, env accessor, real-keyboard-input workaround
+src/hooks/        Test lifecycle hooks (failure capture; run-summary reporter → test-results/summary.txt)
+src/utils/        adb helpers, device-scale (multi-resolution coords), logger, real-keyboard-input workaround
 tests/specs/      Automated test specs, grouped by epic (auth/, chat/)
 test-cases/       Manual test cases, traced 1:1 to automated scenario IDs
 ```
@@ -71,7 +70,13 @@ npm install
 npm test
 ```
 
-Physical-device-dependent scenarios need `DEVICE_UDID` set and will otherwise skip themselves. Full prerequisites, the `--mochaOpts.grep` pattern, priority-based runs, and the complete scenario table live in **[`docs/running-tests.md`](docs/running-tests.md)** — not duplicated here.
+**All login/auth scenarios** (16 tests):
+
+```bash
+npm test -- --mochaOpts.grep="LOGIN-E2E|AUTH-E2E"
+```
+
+Physical-device-dependent scenarios need `DEVICE_UDID` set and will otherwise skip themselves. `LOGIN-E2E-011` (network loss) requires Appium `adb_shell` enabled — see [`docs/running-tests.md`](docs/running-tests.md). Full prerequisites, priority-based runs, and the complete scenario table live in **[`docs/running-tests.md`](docs/running-tests.md)** — not duplicated here.
 
 ## Notable engineering decisions
 
