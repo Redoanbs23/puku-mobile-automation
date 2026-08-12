@@ -76,7 +76,17 @@ npm test
 npm test -- --mochaOpts.grep="LOGIN-E2E|AUTH-E2E"
 ```
 
-Physical-device-dependent scenarios need `DEVICE_UDID` set and will otherwise skip themselves. `LOGIN-E2E-011` (network loss) requires Appium `adb_shell` enabled — see [`docs/running-tests.md`](docs/running-tests.md). Full prerequisites, priority-based runs, and the complete scenario table live in **[`docs/running-tests.md`](docs/running-tests.md)** — not duplicated here.
+Physical-device-dependent scenarios need `DEVICE_UDID` set and will otherwise skip themselves. Full prerequisites, priority-based runs, and the complete scenario table live in **[`docs/running-tests.md`](docs/running-tests.md)** — not duplicated here.
+
+## CI (GitHub Actions)
+
+| Workflow | Trigger | What runs |
+|---|---|---|
+| **`ci.yml`** | Push / PR | Lint + typecheck (always). Emulator smoke (`LOGIN-E2E-002`) only when `ENABLE_EMULATOR_CI=true` repo variable is set and `PUKU_APK_URL` secret exists. |
+| **`ci-on-app-release.yml`** | App release dispatch | Downloads APK from release payload + runs `LOGIN-E2E-002`. Needs `APP_REPO_READ_TOKEN`. |
+| **`ci-authenticated.yml`** | Manual only | Logged-in snapshot suite — not implemented yet (placeholder steps). Do not trigger until snapshot infra exists. |
+
+To enable emulator smoke on push/PR: repo **Settings → Secrets** add `PUKU_APK_URL` (and `APP_REPO_READ_TOKEN` for private GitHub releases), then **Settings → Variables** set `ENABLE_EMULATOR_CI` to `true`.
 
 ## Notable engineering decisions
 
