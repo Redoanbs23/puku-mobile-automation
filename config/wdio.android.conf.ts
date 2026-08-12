@@ -14,7 +14,7 @@ export const androidCapabilities = {
   'appium:deviceName': localEnvironment.deviceName,
   'appium:platformVersion': localEnvironment.platformVersion,
   'appium:app': localEnvironment.appPath,
-  'appium:appPackage': 'sh.puku.app',
+  'appium:appPackage': localEnvironment.appPackage,
   'appium:autoGrantPermissions': true,
   // Default false, unchanged: every session resets app data, guaranteeing a
   // clean logged-out state (relied on by LOGIN-E2E-002, AUTH-E2E-015/016,
