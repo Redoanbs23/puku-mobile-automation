@@ -28,5 +28,11 @@ export const localEnvironment = {
   deviceName: process.env.DEVICE_NAME ?? 'Pixel_7',
   platformVersion: process.env.PLATFORM_VERSION ?? (udid && detectPlatformVersion(udid)) ?? '14',
   appPath: process.env.PUKU_APK_PATH ?? DEFAULT_APK_PATH,
+  // Default matches the prod-release build tested locally/on-device all
+  // along (sh.puku.app). CI overrides this to sh.puku.app.dev when
+  // testing against the dev-release build fetched from the app repo's
+  // latest release — confirmed via aapt (see ci.yml) that the dev variant
+  // installs under a different applicationId, not sh.puku.app.
+  appPackage: process.env.APP_PACKAGE ?? 'sh.puku.app',
   udid,
 };
