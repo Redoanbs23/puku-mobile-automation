@@ -30,14 +30,22 @@ permissions:
 jobs:
   emulator-safe:
     name: Lint, typecheck, and LOGIN-E2E-002 (vanilla emulator)
-    runs-on: macos-latest
-    # macos-latest chosen over ubuntu+KVM for the emulator boot step:
-    # reactivecircus/android-emulator-runner works out of the box here
-    # without needing to configure KVM permissions on the runner. Slower
-    # and more expensive per-minute than Linux, but avoids relying on
-    # KVM enablement behavior that varies by GitHub-hosted runner image.
-    # Revisit if CI cost/time becomes a real constraint.
+    runs-on: ubuntu-latest
+    # Switched from macos-latest to ubuntu-latest + explicit KVM enablement
+    # (the "Enable KVM group perms" step below, the standard pattern from
+    # reactivecircus/android-emulator-runner's own docs) — cheaper and
+    # faster per-minute than macOS, and KVM enablement on GitHub-hosted
+    # Ubuntu runners is a known-stable pattern, not the variable risk the
+    # prior comment here assumed. arch: x86_64 on the emulator step below
+    # matches this runner's actual host architecture (Ubuntu GitHub
+    # runners are x86_64, unlike macos-latest's Apple Silicon hosts).
     steps:
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Checkout
         uses: actions/checkout@v4
 
