@@ -145,9 +145,13 @@ jobs:
           api-level: 34
           target: google_apis
           arch: x86_64
+          avd-name: Pixel_7
           # Vanilla AVD — deliberately not the pre-authenticated snapshot.
           # LOGIN-E2E-002 has no login dependency (see the CI/CD readiness
           # analysis), so a fresh, unauthenticated emulator is correct here.
+          # avd-name matches config/environments/local.ts's deviceName
+          # default ('Pixel_7'), which config/wdio.android.conf.ts feeds
+          # into appium:avd — no DEVICE_NAME override needed in CI.
           script: npm test -- --mochaOpts.grep="LOGIN-E2E-002"
 
       - name: Upload test results
