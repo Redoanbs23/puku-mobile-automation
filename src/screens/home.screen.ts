@@ -91,6 +91,22 @@ class HomeScreen extends BaseScreen {
   }
 
   /**
+   * The chat input field matched by class only, for reading text back after
+   * typing. The hint-based chatInputField locator only matches while the
+   * field is empty — Flutter removes the hintText once text is present, so
+   * the @hint attribute disappears from the accessibility tree. Confirmed
+   * live on the A13 (R58T90F5ALY) on 2026-08-13: after typing "hello", the
+   * EditText node has text="hello" and no hint attribute, and getText() on
+   * the hint-based locator fails with "element wasn't found". This is the
+   * same root cause as CHAT-E2E-017's known "chatInputField not found"
+   * failure. There is exactly one EditText on the home screen, so matching
+   * by class is unambiguous here.
+   */
+  get chatInputFieldWithText(): ChainablePromiseElement {
+    return $('//android.widget.EditText');
+  }
+
+  /**
    * Both the user's own sent message and PUKU's response render as plain
    * android.view.View elements with a `text` attribute (no content-desc)
    * — confirmed via live dump against RF8T802226Y on 2026-08-06. Matched
@@ -142,9 +158,17 @@ class HomeScreen extends BaseScreen {
    * Focuses the chat input (opens the keyboard) then types via real
    * IME injection — WebdriverIO's setValue() silently fails on this
    * field, see ai-log/lessons-learned.md and src/utils/real-text-input.ts.
+   *
+   * Waits for the field to be displayed after the click before injecting
+   * text — adb's `input text` can drop early keystrokes if they arrive
+   * while the field is still gaining focus/keyboard (observed live on the
+   * A13 as intermittent short text after long messages, CHAT-E2E-014
+   * investigation 2026-08-13). Uses the shared waitForElement helper,
+   * same "wait for the marker, never sleep" discipline used elsewhere.
    */
   async typeChatMessage(text: string): Promise<void> {
     await this.chatInputField.click();
+    await this.waitForElement(this.chatInputField);
     typeRealText(text);
   }
 

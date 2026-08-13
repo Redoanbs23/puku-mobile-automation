@@ -1,5 +1,74 @@
 # QA2 Contribution Log
 
+## Day 2 — August 13, 2026
+
+### Work Completed
+
+**Reconnaissance (read-only, prior to any implementation)**
+
+- Completed the read-only reconnaissance phase for `CHAT-E2E-014`:
+  - Read all 9 mentor-provided `docs/source-analysis/` documents (application overview, feature inventory, screen inventory, user flows, automation analysis, candidates, readiness, priority, test-data/dependencies).
+  - Read `_bmad-output/test-artifacts/test-design-epic-chat-core.md` — confirmed `CHAT-E2E-014` is P2, scoped to long-message input only (no send, no R8 exposure).
+  - Inspected the existing automation: `home.screen.ts`, `sections.screen.ts`, `chat-history.screen.ts`, `base.screen.ts`, `drawer.screen.ts`, `settings.screen.ts`, `auth.flow.ts`, `real-text-input.ts`, `adb.ts`, all `tests/specs/chat/*.spec.ts`, wdio configs, failure-capture hook, and the ai-log.
+  - Reported structured findings (sections A–G).
+
+**CHAT-E2E-014 implementation and physical-device validation attempts**
+
+- Created `tests/specs/chat/long-message.spec.ts` — types a long synthetic message (`[PUKU-QA-TEST:CHAT-E2E-014]` + repeated filler word), asserts the full text is present, then resets via `drawerScreen.newChatButton` and asserts the home screen (clean/default state). Reused `homeScreen.typeChatMessage()` / `typeRealText()` typing path — no duplicate abstraction.
+- Live locator verification on the physical Samsung Galaxy A13 (R58T90F5ALY):
+  - Dumped the UI hierarchy in the empty-input state and after typing "hello".
+  - **Discovery:** the hint-based `chatInputField` locator (`@hint="Chat with Puku..."`) only matches while the field is empty — Flutter removes the `hintText` once text is present, so the `@hint` attribute disappears from the accessibility tree. `getText()` on the hint-based locator reports "element wasn't found" after typing. Added `homeScreen.chatInputFieldWithText` (class-only `//android.widget.EditText`) for reading text back after typing. Same root cause as CHAT-E2E-017's known "chatInputField not found" failure.
+- Corrected the test payload to 328 characters (`FILLER_REPEATS = 75`; `75 * 4 chars = 300` filler + 28-char tag prefix).
+
+**Appium/WebdriverIO read-back limitation investigation**
+
+- `getText()` and `getAttribute('text')` returned 311 chars for the 328-char message (via a temporary probe spec, since removed); Appium page source also showed 311.
+- A 10s `driver.waitUntil` re-read never reached 328 — confirming the cap is not a transient read race.
+- A standalone (non-Appium) `adb shell uiautomator dump` holds the **full 328 characters** in the EditText `text` attribute (verified 5/5).
+
+**Final blocker: raw ADB UiAutomator dump cannot reliably run during the active Appium session**
+
+- Implemented the approved minimal ADB read (temporary `dumpUiAutomatorXml()` in `adb.ts` + `getChatInputRawText()` in `home.screen.ts`). Both physical-device runs failed identically at `adb shell uiautomator dump /sdcard/puku-uiautomator-dump.xml` with a non-zero exit inside the running Appium test.
+- **Isolation evidence:** the exact same dump command succeeds when Appium is not running (`UI hierchary dumped to: ...`, exit 0). Therefore the dump conflicts with Appium's UiAutomator2 session — a framework-level contention, not an app defect or code bug.
+- **Final decision (per the Day 2 decision gate):** stop and document `CHAT-E2E-014` as an **automation blocker**. The raw-dump and Appium-read mechanisms are mutually exclusive under the test session (Appium reads cap at 311; the 328-holding dump cannot run concurrently with Appium). **Reverted all ADB-attempt changes** to the clean pre-ADB state.
+
+**Validation status at end of day**
+
+- `npm run typecheck` — PASS (clean, after revert)
+- `npm run lint` — PASS (clean, after revert)
+- The exact-assertion `long-message.spec.ts` remains, but **cannot pass** because Appium's read of the populated Flutter field caps at 311.
+- No commit made. No changes to `CHAT-E2E-002/015/017/018` or `ci.yml`.
+
+### Findings / Decisions
+
+- The existing `chatInputField` locator is sufficient for **typing** (empty field, hint present) but not for **reading text back** after typing (hint gone once text is present). `chatInputFieldWithText` (class-only) is the smallest maintainable locator for the read.
+- `adb shell input text` handles the 328-char payload without hitting shell-length limits — confirmed live.
+- **Appium/WebdriverIO** `getText()`, `getAttribute('text')`, and `getPageSource()` all expose a capped accessibility value (311 chars) for the populated custom Flutter `EditText`. This is a read-back limitation, not an application defect.
+- **Standalone ADB UiAutomator dump** sees the full 328 chars, but **cannot be invoked reliably from inside the running Appium session** (framework contention). The two viable reads are mutually exclusive under the test.
+- `CHAT-E2E-014` is therefore an **automation blocker** on the physical A13, not an app defect.
+- `CHAT-E2E-015` was reconnaissance-only (not implemented on this branch).
+- `CHAT-E2E-017` remains blocked (device rotation / keyboard dismissal / accessibility issue) — not touched.
+- `CHAT-E2E-018` remains manual-only — not automated.
+
+### Validation
+
+- TypeScript typecheck: PASS (clean, after revert)
+- ESLint: PASS (clean, after revert)
+- Standalone ADB UiAutomator dump of 328-char field: PASS (5/5)
+- Physical-device validation of the automated assertion: **BLOCKED** (see blockers)
+
+### Blockers
+
+- **`CHAT-E2E-014` — automation blocker.** Appium/WebdriverIO cannot read the full 328-char value from the populated Flutter `EditText` (caps at 311), and the raw ADB dump that sees 328 cannot run during the active Appium session. The scenario itself holds 328 (no app defect); the blocker is the automation read-back path.
+- `CHAT-E2E-017` remains an existing blocker.
+
+### Next Steps
+
+- Await QA2 review of the diff / decision on path forward (app-side accessibility fix, or re-scope approval).
+- Do not open a PR until the blocker is resolved or explicitly accepted.
+
+---
+
 ## Day 1 — August 12, 2026
 
 ### Work Completed
