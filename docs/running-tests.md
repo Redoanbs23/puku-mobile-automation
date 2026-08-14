@@ -12,8 +12,9 @@ Single reference for how to run every test in this project.
   - `CHAT-E2E-001`
   - `CHAT-E2E-002`
   - `CHAT-E2E-003`
+  - `SETTINGS-E2E-001` through `SETTINGS-E2E-005`
 
-  On this project, that device is `RF8T802226Y`. Everything else (e.g. `LOGIN-E2E-002`) runs against either the emulator or a physical device, whichever `adb` resolves to.
+  Set `DEVICE_UDID` to the phone or emulator you are using (`adb devices`). Chat-core pixel baselines were recorded at 1080×2408; Settings locators are structural and the hamburger fallback scales to the current screen. Everything else (e.g. `LOGIN-E2E-002`) runs against either an emulator or a physical device, whichever `adb` resolves to.
 
 - **`APP_NO_RESET` environment variable** (optional, default unset/`false`) — every test session resets PUKU's app data before the test body runs, which is what guarantees `LOGIN-E2E-002`/`AUTH-E2E-015`/`016` reliably start from the login screen. Set `APP_NO_RESET=true` only if you need an already-logged-in session to survive into the test run instead of being reset out from under it (see `docs/emulator-vs-device-comparison.md`'s 2026-08-07 entry). Do not set this for the standard suite — it will break every test that expects to start logged out.
 
@@ -78,6 +79,9 @@ Pulled directly from the spec files — only active (`it(...)`) tests are listed
 | `CHAT-E2E-001` | `tests/specs/chat/home-screen.spec.ts` | Yes |
 | `CHAT-E2E-002` | `tests/specs/chat/send-message.spec.ts` | Yes |
 | `CHAT-E2E-003` | `tests/specs/chat/drawer.spec.ts` | Yes |
+| `SETTINGS-E2E-001`–`005` | `tests/specs/settings/settings-profile.spec.ts` | Yes (`APP_NO_RESET=true` recommended) |
+
+Settings details (locators, flow, manual case): [`docs/settings-screen-verification.md`](settings-screen-verification.md).
 
 Everything else across `tests/specs/` is currently an `it.skip()` stub (see `tests/specs/auth/login-screen.spec.ts` and `tests/specs/auth/auth-secondary.spec.ts` for the full list of scaffolded-but-not-yet-automated scenarios).
 

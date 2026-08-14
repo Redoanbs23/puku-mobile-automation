@@ -33,6 +33,8 @@ Two epics designed, both partially automated:
 
 **6 tests pass today**, all verified against a physical device: `LOGIN-E2E-002`, `AUTH-E2E-015`, `AUTH-E2E-016`, `CHAT-E2E-001`, `CHAT-E2E-002`, `CHAT-E2E-003`. 13 more `auth-login` scenarios exist as `it.skip()` scaffolds awaiting implementation. `chat-core`'s remaining 16 scenarios (P1–P3) exist only in its test-design document — not yet scaffolded into spec files at all. 6 manual test cases exist, traced 1:1 to the 6 passing automated scenarios.
 
+**Settings profile header (2026-08-14):** five additional automated checks (`SETTINGS-E2E-001`–`005`) and one combined manual case (`SETTINGS-TC-001`) were added. They open Settings from Home (hamburger → avatar beside New chat) and assert header, email, workspace name, role, and that the role control is clickable. Full file map, locators, and how to run: **[`docs/settings-screen-verification.md`](docs/settings-screen-verification.md)**. Existing chat-core specs were left in place.
+
 ## Architecture overview
 
 Screen Object Model over WebdriverIO, with composed flows layered on top of screens rather than re-implemented per test:
@@ -43,7 +45,7 @@ src/screens/      Screen Object Model — one class per app screen, content-desc
 src/flows/        Composed user flows over screen objects (e.g. login + OAuth consent in one call)
 src/hooks/        Test lifecycle hooks (automatic failure capture: screenshot, logcat, recording)
 src/utils/        adb helpers, logger, env accessor, real-keyboard-input workaround
-tests/specs/      Automated test specs, grouped by epic (auth/, chat/)
+tests/specs/      Automated test specs, grouped by epic (auth/, chat/, settings/)
 test-cases/       Manual test cases, traced 1:1 to automated scenario IDs
 ```
 
@@ -58,6 +60,7 @@ The *why* behind these choices — not just the *what* — lives in `docs/adr/`.
 | ATDD checklist — `chat-core` P0 | [`_bmad-output/test-artifacts/atdd-checklist-chat-core-p0.md`](_bmad-output/test-artifacts/atdd-checklist-chat-core-p0.md) |
 | Architecture Decision Records | [`docs/adr/`](docs/adr/) |
 | How to run every test | [`docs/running-tests.md`](docs/running-tests.md) |
+| Settings screen verification (`SETTINGS-E2E-001`–`005`) | [`docs/settings-screen-verification.md`](docs/settings-screen-verification.md) |
 | Test message convention (R14) | [`docs/testing/test-message-convention.md`](docs/testing/test-message-convention.md) |
 | Manual test cases | [`test-cases/`](test-cases/) |
 | APK reconnaissance notes | [`docs/00-apk-reconnaissance.md`](docs/00-apk-reconnaissance.md) |
