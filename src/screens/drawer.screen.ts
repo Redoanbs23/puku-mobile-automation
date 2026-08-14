@@ -1,11 +1,8 @@
 import { BaseScreen } from './base.screen.js';
 
 /**
- * The navigation drawer, opened via settingsScreen.tapHamburgerMenuTrigger()
- * (the trigger icon itself has no locator — see settings.screen.ts and
- * ai-log/lessons-learned.md). All drawer items below have clean,
- * single-value content-desc, confirmed via a live page-source dump
- * against RF8T802226Y on 2026-08-06.
+ * Navigation drawer. Open via settingsScreen.tapHamburgerMenuTrigger()
+ * (settings-nav.screen.ts). Items use ~ content-desc.
  */
 class DrawerScreen extends BaseScreen {
   get chatsMenuItem(): ChainablePromiseElement {

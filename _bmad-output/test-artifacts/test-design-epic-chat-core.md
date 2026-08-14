@@ -167,8 +167,13 @@ None identified at this scope — all newly registered risks scored ≥4, consis
 | SETTINGS-E2E-003 | Workspace / organization (display) name is visible on Settings | E2E (Mobile) | R12 | Optional `SETTINGS_WORKSPACE_NAME`. |
 | SETTINGS-E2E-004 | Workspace role is visible (e.g. Power) | E2E (Mobile) | R12 | Records the test account's plan/tier in Settings. Optional `SETTINGS_WORKSPACE_ROLE` (default `Power`). |
 | SETTINGS-E2E-005 | Role control is clickable (expand / account-switcher entry) | E2E (Mobile) | R12 | Same node as 004; asserts `clickable="true"`. Does not complete a workspace switch (app currently shows Account switcher placeholder). |
+| SETTINGS-E2E-006 | Settings app-bar Back control is visible | E2E (Mobile) | R4 | Added 2026-08-14. Unlabeled clickable Button before `~Settings` (`settingsBackButton`). Spec `tests/specs/settings/settings-header.spec.ts`. |
+| SETTINGS-E2E-007 | Settings app-bar Back returns to Home | E2E (Mobile) | — | In-app Back, not `driver.back()`. Runs last in the header spec. |
+| SETTINGS-E2E-008 | Settings title is displayed in the app bar | E2E (Mobile) | — | Same `~Settings` node as SETTINGS-E2E-001; header-suite check. |
+| SETTINGS-E2E-009 | Information icon is visible on the Settings app bar | E2E (Mobile) | — | `~Information`. |
+| SETTINGS-E2E-010 | Information icon is clickable | E2E (Mobile) | — | Nested unlabeled Button `clickable="true"`; tap must not leave Settings. |
 
-**Total P1**: 12 tests (original 7 plus SETTINGS-E2E-001–005), ~10–18 hours for the original 7; Settings profile header is additional smoke, not a new cost-triggering lane
+**Total P1**: 17 tests (original 7 plus SETTINGS-E2E-001–010)
 
 ### P2 (Medium)
 

@@ -12,7 +12,7 @@ Single reference for how to run every test in this project.
   - `CHAT-E2E-001`
   - `CHAT-E2E-002`
   - `CHAT-E2E-003`
-  - `SETTINGS-E2E-001` through `SETTINGS-E2E-005`
+  - `SETTINGS-E2E-001` through `SETTINGS-E2E-010`
   - `CHAT-E2E-015`
 
   Set `DEVICE_UDID` to the phone or emulator you are using (`adb devices`). Chat-core pixel baselines were recorded at 1080×2408; Settings locators are structural and the hamburger fallback scales to the current screen. Everything else (e.g. `LOGIN-E2E-002`) runs against either an emulator or a physical device, whichever `adb` resolves to.
@@ -81,6 +81,7 @@ Pulled directly from the spec files — only active (`it(...)`) tests are listed
 | `CHAT-E2E-002` | `tests/specs/chat/send-message.spec.ts` | Yes |
 | `CHAT-E2E-003` | `tests/specs/chat/drawer.spec.ts` | Yes |
 | `SETTINGS-E2E-001`–`005` | `tests/specs/settings/settings-profile.spec.ts` | Yes (`APP_NO_RESET=true` recommended) |
+| `SETTINGS-E2E-006`–`010` | `tests/specs/settings/settings-header.spec.ts` | Yes (`APP_NO_RESET=true` recommended) |
 | `CHAT-E2E-015` | `tests/specs/settings/locator-health.spec.ts` | Yes |
 
 Settings locators, hamburger/avatar behaviour, Settings-only Custom Tab X, and `CHAT-E2E-015`: [`docs/settings-screen-verification.md`](settings-screen-verification.md).
