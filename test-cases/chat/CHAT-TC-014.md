@@ -1,7 +1,7 @@
 # CHAT-TC-014: Long message input is accepted without crash or truncation
 
 **Priority:** P2 (test-design-epic-chat-core.md coverage matrix)
-**Linked automated test:** `CHAT-E2E-014` — spec exists (tests/specs/chat/long-message.spec.ts) but **automation blocked**
+**Linked automated test:** `CHAT-E2E-014` — spec exists (tests/specs/chat/long-message.spec.ts), assertion re-scoped (mentor-approved, 2026-08-14)
 **Linked risk(s):** —
 
 ## Preconditions
@@ -25,16 +25,21 @@ The input field accepts the long message. The app does not crash, and the text i
 
 ## Status
 
-**Blocked — Automation Blocker** (documented 2026-08-13). The scenario itself is not an application defect; the blocker is the automation read-back path (see Notes).
+**Assertion re-scoped (mentor-approved, 2026-08-14).** The scenario is not an application defect; the re-scope is due to the automation read-back path (see Notes). The test now asserts what the supported stack can reliably observe.
 
 ## Notes
 
-**Blocked — Automation Blocker (2026-08-13).** The app and the typing path work correctly: the chat input accepts the full 328-char message (raw `adb shell uiautomator dump` verifies all 328 chars 5/5 on the physical A13), and `typeRealText()` types it without truncation. The blocker is the **read-back path**:
+**Assertion re-scope (2026-08-14).** The app and the typing path work correctly: the chat input accepts the full 328-char message (raw `adb shell uiautomator dump` verifies all 328 chars 5/5 on the physical A13), and `typeRealText()` types it without truncation. The re-scope is required by the **read-back path**:
 
-1. **Appium/WebdriverIO cannot read the full value.** `getText()`, `getAttribute('text')`, and `getPageSource()` all expose a capped accessibility value of **311 chars** for the populated Flutter `EditText` (confirmed via a temporary probe spec on the A13, 2026-08-13).
+1. **Appium/WebdriverIO cannot read the full value.** `getText()`, `getAttribute('text')`, and `getPageSource()` all expose a capped accessibility value of **~299–311 chars** for the populated Flutter `EditText` (confirmed via a temporary probe spec on the A13, 2026-08-13).
 2. **Raw ADB dump cannot run during the test session.** The one mechanism that reads the full 328 chars — `adb shell uiautomator dump` — returns a non-zero exit when invoked from inside a running Appium session (confirmed 2/2 runs). The same command succeeds standalone (Appium stopped), proving the failure is **framework contention** (Appium's UiAutomator2 driver vs. a concurrent `uiautomator dump`), not an app defect or code bug.
 
-Because the two viable reads are mutually exclusive under the test, the exact 328-character round-trip assertion cannot be validated through automation at this time. The spec `tests/specs/chat/long-message.spec.ts` remains (with the corrected 328-char payload and exact assertion), but **cannot pass** until the read-back path is unblocked.
+**Re-scoped assertion (Candidate A, mentor-approved):** after typing the full 328-char payload, the test asserts:
+- **No crash** — the populated field (`chatInputFieldWithText`) is displayed (primary signal; a crash would remove the EditText node) and the home screen heading (`chatPromptHeading`) is displayed (secondary signal; its presence in the populated state was observed in a single Day 2 probe page-source snapshot, not multi-run confirmed).
+- **Non-empty** entered text.
+- **Exact prefix start** — the text begins with `[PUKU-QA-TEST:CHAT-E2E-014]` (proves the full 328-char payload was typed and the start is uncorrupted).
+
+**Accepted known limitation:** this test **cannot detect app-side tail truncation** of the payload beyond what Appium's read path exposes (~299–311 of 328 chars). This is a **framework/read-path limitation, not a demonstrated app defect** — the 5/5 standalone ADB dump evidence shows the app holds all 328 chars. The exact 328-char round-trip is not verifiable through the supported automation stack.
 
 **Locator finding (2026-08-13):** the hint-based `chatInputField` locator (`@hint="Chat with Puku..."`) only matches while the field is empty — Flutter removes the `hintText` once text is present, so the `@hint` attribute disappears from the accessibility tree. Confirmed live on the A13: after typing, the EditText node has `text="..."` and no hint attribute, and `getText()` on the hint-based locator fails with "element wasn't found". Added `homeScreen.chatInputFieldWithText` (class-only `//android.widget.EditText`) for reading text back after typing. This is the same root cause as CHAT-E2E-017's known "chatInputField not found" failure.
 

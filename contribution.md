@@ -1,5 +1,58 @@
 # QA2 Contribution Log
 
+## Day 3 — August 14, 2026
+
+### Work Completed
+
+**CHAT-E2E-014 assertion re-scope (mentor-approved) and validation**
+
+- The mentor approved re-scoping the CHAT-E2E-014 assertion (the exact 328-char round-trip is not verifiable through the supported automation stack — see Day 2 blocker evidence).
+- Inspected the current repository state, the authoritative test-design epic (CHAT-E2E-014: "Long message input accepted without crash/truncation issues", no exact length specified), the current spec, and CHAT-TC-014.md before editing.
+- Answered QA2's five analysis questions (exact proposed assertion, meaningfulness, failure modes caught/not caught, evidence) and confirmed the post-`deleteSession()` ADB dump path is **dead** (it would break the no-crash assertion, the clean-state reset, and the failure-capture/teardown hooks — all of which require a live Appium session).
+- Implemented the approved **Candidate A** re-scoped assertion in `tests/specs/chat/long-message.spec.ts`:
+  - Still types the **full 328-char payload** via `homeScreen.typeChatMessage()` (unchanged typing path).
+  - **No-crash (primary):** `chatInputFieldWithText` is displayed (a crash would remove the EditText node).
+  - **No-crash (secondary):** `chatPromptHeading` is displayed (single-run Day 2 probe page-source evidence, not multi-run confirmed — noted in the comment).
+  - **Non-empty** entered text.
+  - **Exact prefix start:** text begins with `[PUKU-QA-TEST:CHAT-E2E-014]` (proves the full payload was typed and the start is uncorrupted).
+  - File-level comment updated to be accurate: the re-scope does **NOT** confirm the full 328 chars are present (Appium read caps ~299–311); app-side tail truncation beyond that window is not detectable — an accepted known limitation, not a demonstrated app defect.
+- Updated `test-cases/chat/CHAT-TC-014.md`:
+  - Status changed from "Blocked — Automation Blocker" to "Assertion re-scoped (mentor-approved, 2026-08-14)".
+  - Documented the re-scoped assertion, the **accepted known limitation** (cannot detect app-side tail truncation beyond Appium's ~299–311 read window; framework/read-path limitation, not a demonstrated app defect — 5/5 standalone ADB dump evidence preserved), and the full Day 2 blocker evidence.
+- **Physical-device validation (Samsung Galaxy A13, R58T90F5ALY):**
+  - Ran `npx wdio run wdio.conf.ts --spec tests/specs/chat/long-message.spec.ts` — **PASS** (1 passing, 41s; Spec Files: 1 passed, 1 total, 100% completed).
+  - Confirmed the test exercised the full 328-char payload, the app did not crash, the re-scoped assertion passed, and the app was left in clean/default state (New chat reset → home screen displayed).
+  - Note: the successful run was executed from the VSCode PowerShell terminal (same as all prior successful runs).
+- Validation:
+  - `npm run typecheck` — PASS
+  - `npm run lint` — PASS
+- No changes to `CHAT-E2E-002/015/017/018` or `ci.yml`. No commit made.
+
+### Findings / Decisions
+
+- The strongest assertion the supported stack can reliably verify is: no-crash (populated field displayed + home heading displayed) + non-empty + exact prefix start. It cannot catch app-side tail truncation beyond Appium's read window — an accepted, documented limitation of the re-scope.
+- The post-`deleteSession()` ADB dump path is not viable: it would break the no-crash assertion, the clean-state reset, and the failure-capture/teardown hooks (all require a live Appium session).
+- `chatPromptHeading` displayed in the populated state is supported by a single Day 2 probe page-source snapshot — treated as secondary evidence, not multi-run confirmed.
+
+### Validation
+
+- TypeScript typecheck: PASS
+- ESLint: PASS
+- CHAT-E2E-014 on physical Samsung Galaxy A13 (R58T90F5ALY): **PASS** (1 passing, 41s)
+- Full 328-char payload exercised: confirmed
+- App left in clean/default state: confirmed
+
+### Blockers
+
+- No new blocker for `CHAT-E2E-014` (re-scope resolved the Day 2 automation blocker).
+- `CHAT-E2E-017` remains an existing blocker.
+
+### Next Steps
+
+- Prepare evidence for the eventual PR (terminal PASS output captured).
+
+---
+
 ## Day 2 — August 13, 2026
 
 ### Work Completed
