@@ -12,7 +12,7 @@ Five automated checks (one assertion per test) plus one combined manual case. Sh
 
 | ID | What it checks |
 |---|---|
-| `SETTINGS-E2E-001` | Settings page is open (`~SETTINGS` header) |
+| `SETTINGS-E2E-001` | Settings page is open (`~Settings` header) |
 | `SETTINGS-E2E-002` | Signed-in user email is visible |
 | `SETTINGS-E2E-003` | Workspace / organization name is visible |
 | `SETTINGS-E2E-004` | Workspace role is visible (e.g. `Power`) |
@@ -50,7 +50,7 @@ Priority: **P1**. All five require `DEVICE_UDID` and a **logged-in** session (`A
 
 | Method | What it does |
 |---|---|
-| `returnToHomeIfPossible()` | Back / Home until the chat heading is visible |
+| `returnToHomeIfPossible()` | Foreground the app; one Back from Settings and/or drawer if those screens are showing |
 | `openSettingsFromHome()` | Hamburger → avatar → Settings header |
 | `ensureOnSettings()` | Recover leftover Settings/drawer, then **always** `authFlow.ensureLoggedIn()` (no-op if Home is already shown; Google OAuth if on login), then open Settings |
 | `dismissSettingsToHome()` | Back until Home heading is shown |
@@ -70,15 +70,15 @@ Priority: **P1**. All five require `DEVICE_UDID` and a **logged-in** session (`A
 
 Stop Appium Inspector first if it is bound to port **4723**.
 
-```bat
-cd /d C:\Users\BS01645\Documents\PUKU_APP_Project_Appium_test\puku-mobile-automation
+```powershell
+cd "C:\Users\BS01645\Documents\PUKU_APP_Project_Appium_test\puku-mobile-automation"
 adb devices
-set DEVICE_UDID=<udid from adb devices>
-set APP_NO_RESET=true
-npm test -- --mochaOpts.grep="SETTINGS-E2E-00"
+$env:DEVICE_UDID = "<udid from adb devices>"
+$env:APP_NO_RESET = "true"
+npm test -- --spec tests/specs/settings/settings-profile.spec.ts
 ```
 
-Use the UDID of **whichever** phone or emulator you are targeting. `APP_NO_RESET=true` keeps an existing login. A session that is still on the login screen will go through login from `ensureOnSettings()`.
+Works on a phone **or** emulator: set `DEVICE_UDID` to that serial. `APP_NO_RESET=true` keeps an existing login. If the session is still on the login screen, `ensureOnSettings()` runs `authFlow.ensureLoggedIn()`. Close Appium Inspector (port **4723**) before this command.
 
 ## Known product / a11y notes
 

@@ -161,9 +161,14 @@ None identified at this scope — all newly registered risks scored ≥4, consis
 | CHAT-E2E-007 | Empty message cannot be sent (send control disabled/no-op) | E2E (Mobile) | — | Cheap edge case — does not trigger a real send, no R8 exposure |
 | CHAT-E2E-008 | Network dropped mid-message-send → graceful error, no crash | E2E (Mobile) | R9, R8, NFR-Reliability | Mirrors `LOGIN-E2E-011`'s pattern. Cost-triggering (R8). Priority pending evidence — requires one careful, R8-mindful manual observation of the actual failure mode (graceful error vs. crash/hang) before this can be responsibly assessed |
 | CHAT-E2E-009 | "Chats" drawer entry opens; history list renders without crash | E2E (Mobile) | R10 | Structural only; foundational for later detecting R10 pollution |
-| CHAT-E2E-010 | Settings toggles (Haptic feedback, Notifications) can be toggled without crash; state visibly reflects the tap | E2E (Mobile) | — | Extends `settings.screen.ts`, not yet automated for these two toggles |
+| CHAT-E2E-010 | Settings toggles (Haptic feedback, Notifications) can be toggled without crash; state visibly reflects the tap | E2E (Mobile) | — | Extends `settings.screen.ts` (`tests/specs/chat/settings-toggles.spec.ts`) |
+| SETTINGS-E2E-001 | Settings page opens from Home (hamburger → avatar beside New chat) | E2E (Mobile) | R12 | Added 2026-08-14. Profile-header smoke; locators in `settings.screen.ts`; spec `tests/specs/settings/settings-profile.spec.ts`. Requires `DEVICE_UDID`; `APP_NO_RESET=true` if a logged-in session must survive. Teardown returns to Home (CHAT-E2E-004 pattern). |
+| SETTINGS-E2E-002 | Signed-in user email is visible on Settings | E2E (Mobile) | R12 | Same spec/file as 001; one assertion. Optional `SETTINGS_USER_EMAIL`. |
+| SETTINGS-E2E-003 | Workspace / organization (display) name is visible on Settings | E2E (Mobile) | R12 | Optional `SETTINGS_WORKSPACE_NAME`. |
+| SETTINGS-E2E-004 | Workspace role is visible (e.g. Power) | E2E (Mobile) | R12 | Records the test account's plan/tier in Settings. Optional `SETTINGS_WORKSPACE_ROLE` (default `Power`). |
+| SETTINGS-E2E-005 | Role control is clickable (expand / account-switcher entry) | E2E (Mobile) | R12 | Same node as 004; asserts `clickable="true"`. Does not complete a workspace switch (app currently shows Account switcher placeholder). |
 
-**Total P1**: 7 tests, ~10–18 hours
+**Total P1**: 12 tests (original 7 plus SETTINGS-E2E-001–005), ~10–18 hours for the original 7; Settings profile header is additional smoke, not a new cost-triggering lane
 
 ### P2 (Medium)
 
@@ -216,7 +221,7 @@ Philosophy carried forward from `auth-login`: run everything in PR if it fits co
 | Priority | Count | Estimated Hours | Notes |
 |----------|-------|------------------|-------|
 | P0 | 4 | ~7–14 | New locator work for drawer/home exceeds `auth-login`'s already-mapped login screen; `CHAT-E2E-019` (added 2026-08-06) needs a new backgrounding/resume interaction on top of that |
-| P1 | 7 | ~10–18 | Broadest tier — model switching, history, Settings toggles |
+| P1 | 12 | ~10–18 (+ Settings header smoke) | Original 7 plus SETTINGS-E2E-001–005 (2026-08-14) |
 | P2 | 5 | ~6–12 | Three of five are pure smoke tests, cheap but exploration-gated (R13) |
 | P3 | 3 | ~2–5 | |
 | **Total** | **19** | **~25–49** | **~3–6 days** |
