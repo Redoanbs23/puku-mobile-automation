@@ -162,7 +162,7 @@ None identified at this scope — all newly registered risks scored ≥4, consis
 | CHAT-E2E-008 | Network dropped mid-message-send → graceful error, no crash | E2E (Mobile) | R9, R8, NFR-Reliability | Mirrors `LOGIN-E2E-011`'s pattern. Cost-triggering (R8). Priority pending evidence — requires one careful, R8-mindful manual observation of the actual failure mode (graceful error vs. crash/hang) before this can be responsibly assessed |
 | CHAT-E2E-009 | "Chats" drawer entry opens; history list renders without crash | E2E (Mobile) | R10 | Structural only; foundational for later detecting R10 pollution |
 | CHAT-E2E-010 | Settings toggles (Haptic feedback, Notifications) can be toggled without crash; state visibly reflects the tap | E2E (Mobile) | — | Extends `settings.screen.ts` (`tests/specs/chat/settings-toggles.spec.ts`) |
-| SETTINGS-E2E-001 | Settings page opens from Home (hamburger → avatar beside New chat) | E2E (Mobile) | R12 | Added 2026-08-14. Profile-header smoke; locators in `settings.screen.ts`; spec `tests/specs/settings/settings-profile.spec.ts`. Requires `DEVICE_UDID`; `APP_NO_RESET=true` if a logged-in session must survive. Teardown returns to Home (CHAT-E2E-004 pattern). |
+| SETTINGS-E2E-001 | Settings page opens from Home (hamburger → avatar beside New chat) | E2E (Mobile) | R12 | Added 2026-08-14. Spec `tests/specs/settings/settings-profile.spec.ts`. Hamburger: leftmost top-bar View, then scaled coords. Avatar: any single letter, not `~P`. Settings-only Custom Tab X on login (AUTH-E2E-015 unchanged). Requires `DEVICE_UDID`; `APP_NO_RESET=true` for existing login. |
 | SETTINGS-E2E-002 | Signed-in user email is visible on Settings | E2E (Mobile) | R12 | Same spec/file as 001; one assertion. Optional `SETTINGS_USER_EMAIL`. |
 | SETTINGS-E2E-003 | Workspace / organization (display) name is visible on Settings | E2E (Mobile) | R12 | Optional `SETTINGS_WORKSPACE_NAME`. |
 | SETTINGS-E2E-004 | Workspace role is visible (e.g. Power) | E2E (Mobile) | R12 | Records the test account's plan/tier in Settings. Optional `SETTINGS_WORKSPACE_ROLE` (default `Power`). |
@@ -180,7 +180,7 @@ None identified at this scope — all newly registered risks scored ≥4, consis
 | CHAT-E2E-012 | Artifacts section opens without crash | E2E (Mobile) | R13 | Smoke only |
 | CHAT-E2E-013 | Code section opens without crash | E2E (Mobile) | R13 | Smoke only |
 | CHAT-E2E-014 | Long message input accepted without crash/truncation issues | E2E (Mobile) | — | Edge case |
-| CHAT-E2E-015 | Locator health-check: all interactive elements on home/drawer/Settings expose usable locators, or are explicitly documented gaps | E2E (Mobile) | R4 | Encodes the hamburger-icon gap as a known, accepted exception — catches future *silent* regressions elsewhere, same role `LOGIN-E2E-006` played |
+| CHAT-E2E-015 | Locator health-check: all interactive elements on home/drawer/Settings expose usable locators, or are explicitly documented gaps | E2E (Mobile) | R4 | Automated 2026-08-14 in `tests/specs/settings/locator-health.spec.ts`. Hamburger and send are accepted gaps (`hasHamburgerA11yLocator` / `hasSendA11yLocator` expected false). |
 
 **Total P2**: 5 tests, ~6–12 hours
 

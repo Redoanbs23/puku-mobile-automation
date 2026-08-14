@@ -7,7 +7,7 @@
 ## Preconditions
 
 - PUKU APK (`sh.puku.app`) is installed and launchable.
-- Must run on a physical device with a Google account already signed in at the OS level, with a standing OAuth grant already authorized for PUKU — per ADR-006 (docs/adr/ADR-006-oauth-consent-automation.md). On this project: device `RF8T802226Y`, account `editorpuku@gmail.com` (a dedicated test account, never a personal one, per R3 credential-hygiene practice).
+- Must run on a physical device with a Google account already signed in at the OS level, with a standing OAuth grant already authorized for PUKU — per ADR-006 (docs/adr/ADR-006-oauth-consent-automation.md). On this project: physical phone NIC-LX2 (UDID `AS9J2U6120005225`, Android 15, 720x1604), account `editorpuku@gmail.com` (a dedicated test account, never a personal one, per R3 credential-hygiene practice).
 - Not meaningful on CI or a fresh emulator — neither has a pre-configured, pre-authorized Google account (ADR-006).
 
 ## Steps

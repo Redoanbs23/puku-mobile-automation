@@ -7,7 +7,7 @@
 ## Preconditions
 
 - PUKU APK (`sh.puku.app`) is installed and launchable.
-- Must run on a physical device with a Google account already signed in at the OS level, with a standing OAuth grant already authorized for PUKU — per ADR-006 (docs/adr/ADR-006-oauth-consent-automation.md). On this project: device `RF8T802226Y`, account `editorpuku@gmail.com`.
+- Must run on a physical device with a Google account already signed in at the OS level, with a standing OAuth grant already authorized for PUKU — per ADR-006 (docs/adr/ADR-006-oauth-consent-automation.md). On this project: physical phone NIC-LX2 (UDID `AS9J2U6120005225`, Android 15, 720x1604), account `editorpuku@gmail.com`.
 - Requires a logged-in PUKU session (see CHAT-TC-001).
 - Device auto-rotate must be enabled, otherwise rotation will not take effect.
 

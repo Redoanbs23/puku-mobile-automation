@@ -157,6 +157,14 @@ class HomeScreen extends BaseScreen {
       .up()
       .perform();
   }
+
+  /**
+   * CHAT-E2E-015: send control has no content-desc / resource-id / text (R4).
+   * Always false until the app exposes an accessibility id for send.
+   */
+  async hasSendA11yLocator(): Promise<boolean> {
+    return false;
+  }
 }
 
 export const homeScreen = new HomeScreen();

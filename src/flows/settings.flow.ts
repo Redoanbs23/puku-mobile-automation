@@ -1,6 +1,7 @@
 import { authFlow } from './auth.flow.js';
 import { drawerScreen } from '../screens/drawer.screen.js';
 import { homeScreen } from '../screens/home.screen.js';
+import { oauthConsentScreen } from '../screens/oauth-consent.screen.js';
 import { settingsScreen } from '../screens/settings.screen.js';
 
 /**
@@ -50,6 +51,7 @@ export const settingsFlow = {
    * Does not install/uninstall the APK.
    */
   async openSettingsFromHome(): Promise<void> {
+    await homeScreen.waitUntilDisplayed();
     await settingsScreen.tapHamburgerMenuTrigger();
     await settingsScreen.tapProfileAvatar();
     await settingsScreen.settingsHeader.waitForDisplayed({ timeout: 10000 });
@@ -58,15 +60,24 @@ export const settingsFlow = {
   /**
    * Shared path for Settings verification specs.
    *
-   * Same login gate as CHAT-E2E-003 / CHAT-E2E-010: always call
-   * authFlow.ensureLoggedIn() before opening Settings. If Home is already
-   * shown, that helper returns immediately; if the session is on login,
-   * it runs completeGoogleSignIn(). Skipping this step leaves the suite
-   * on the login screen and every Settings assertion fails.
+   * If Home is already shown, skip login. If the session is on login,
+   * run Google sign-in here (not authFlow.ensureLoggedIn) so the emulator
+   * Custom Tab X is tapped only for Settings — AUTH-E2E-015 is unchanged.
    */
   async ensureOnSettings(): Promise<void> {
     await this.returnToHomeIfPossible();
-    await authFlow.ensureLoggedIn();
+    if (!(await homeScreen.isDisplayed())) {
+      await authFlow.attemptGoogleSignIn();
+      await oauthConsentScreen.waitUntilDisplayed();
+      await oauthConsentScreen.tapAuthorize();
+      await driver.pause(1500);
+      await settingsScreen.dismissChromeCustomTabIfOpen();
+      await driver.waitUntil(async () => (await driver.getCurrentPackage()) === 'sh.puku.app', {
+        timeout: 15000,
+        timeoutMsg: 'App did not return to sh.puku.app after tapping Authorize',
+      });
+      await homeScreen.waitUntilDisplayed();
+    }
     await this.openSettingsFromHome();
   },
 

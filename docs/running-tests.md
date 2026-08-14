@@ -13,6 +13,7 @@ Single reference for how to run every test in this project.
   - `CHAT-E2E-002`
   - `CHAT-E2E-003`
   - `SETTINGS-E2E-001` through `SETTINGS-E2E-005`
+  - `CHAT-E2E-015`
 
   Set `DEVICE_UDID` to the phone or emulator you are using (`adb devices`). Chat-core pixel baselines were recorded at 1080×2408; Settings locators are structural and the hamburger fallback scales to the current screen. Everything else (e.g. `LOGIN-E2E-002`) runs against either an emulator or a physical device, whichever `adb` resolves to.
 
@@ -80,8 +81,9 @@ Pulled directly from the spec files — only active (`it(...)`) tests are listed
 | `CHAT-E2E-002` | `tests/specs/chat/send-message.spec.ts` | Yes |
 | `CHAT-E2E-003` | `tests/specs/chat/drawer.spec.ts` | Yes |
 | `SETTINGS-E2E-001`–`005` | `tests/specs/settings/settings-profile.spec.ts` | Yes (`APP_NO_RESET=true` recommended) |
+| `CHAT-E2E-015` | `tests/specs/settings/locator-health.spec.ts` | Yes |
 
-Settings details (locators, flow, manual case): [`docs/settings-screen-verification.md`](settings-screen-verification.md).
+Settings locators, hamburger/avatar behaviour, Settings-only Custom Tab X, and `CHAT-E2E-015`: [`docs/settings-screen-verification.md`](settings-screen-verification.md).
 
 Everything else across `tests/specs/` is currently an `it.skip()` stub (see `tests/specs/auth/login-screen.spec.ts` and `tests/specs/auth/auth-secondary.spec.ts` for the full list of scaffolded-but-not-yet-automated scenarios).
 

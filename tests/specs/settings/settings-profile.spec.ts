@@ -6,8 +6,8 @@ import { settingsScreen } from '../../../src/screens/settings.screen.js';
  * Settings profile header checks (P1). One assertion per test.
  *
  * Shared path (once per describe): ensureOnSettings()
- *   recover Home/drawer leftover → authFlow.ensureLoggedIn() →
- *   hamburger → avatar → Settings
+ *   recover Home/drawer leftover → login if needed (Settings-only Custom Tab X
+ *   on emulator) → hamburger → avatar → Settings
  * Teardown (once): dismissSettingsToHome() so the next spec starts on Home.
  *
  * Locators are structural (any Android device/emulator). Live-confirmed 2026-08-14.
