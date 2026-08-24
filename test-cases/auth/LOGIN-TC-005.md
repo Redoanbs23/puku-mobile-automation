@@ -23,7 +23,7 @@ The login screen renders with both auth entry points visible: "Continue with Goo
 
 ## Status
 
-Not Run
+Pass
 
 ## Notes
 

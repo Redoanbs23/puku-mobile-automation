@@ -279,7 +279,7 @@ Implemented `LOGIN-E2E-005` (P0) — "Both auth entry points render (Continue wi
 
 ### What was done
 
-- **Branch:** `feat/login-e2e-005` created off `master` (clean working tree confirmed first). No PR created, nothing pushed.
+- **Branch:** `feat/login-e2e-005` created off `master`.
 - **Automation:** Replaced the `it.skip('LOGIN-E2E-005 ...')` stub in `tests/specs/auth/login-screen.spec.ts` with an active `it(...)` that:
   - waits for the login screen via the existing `loginScreen.waitUntilDisplayed()`;
   - asserts `loginScreen.continueWithGoogleButton` and `loginScreen.enterYourEmailButton` are displayed;
