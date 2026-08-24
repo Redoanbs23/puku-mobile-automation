@@ -25,6 +25,8 @@ The input field accepts the long message. The app does not crash, and the text i
 
 ## Status
 
+Pass
+
 **Assertion re-scoped (mentor-approved, 2026-08-14).** The scenario is not an application defect; the re-scope is due to the automation read-back path (see Notes). The test now asserts what the supported stack can reliably observe.
 
 ## Notes
