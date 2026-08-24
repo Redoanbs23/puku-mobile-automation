@@ -21,7 +21,19 @@ describe('Login screen — P0/P1', () => {
 
   it.skip('LOGIN-E2E-007 @p1: tapping Continue with Google redirects to the external Chrome OAuth screen', async () => {});
 
-  it.skip('LOGIN-E2E-008 @p0: tapping Enter your email shows the "not connected" toast (R1 regression guard)', async () => {});
+  it('LOGIN-E2E-008 @p0: tapping Enter your email shows the "not connected" toast (R1 regression guard)', async () => {
+    await loginScreen.waitUntilDisplayed();
+    // P0/R1 temporary regression guard: while the email sign-in flow is not
+    // implemented, tapping "Enter your email" must show the
+    // "Email sign-in flow is not connected yet" notification (verified live
+    // as a Flutter SnackBar semantics node, 2026-08-24, physical A13).
+    // This test should NOT be silently updated to keep it green: if it
+    // starts failing because the expected "not connected" behavior
+    // disappears, the email sign-in flow may now be implemented — that is the
+    // signal to review/re-open scope (see R1 in test-design-epic-auth-login.md).
+    await loginScreen.tapEnterYourEmail();
+    await expect(loginScreen.emailNotConnectedSnackBar).toBeDisplayed();
+  });
 
   it.skip('LOGIN-E2E-009 @p1: broken email-auth error toast contains no sensitive data', async () => {});
 
