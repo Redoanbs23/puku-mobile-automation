@@ -269,3 +269,33 @@ Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-tr
 1. Waiting on the app team to push a real version tag (unblocks the app repo's Build workflow, which has never run).
 2. Waiting on `smrefat02`'s review of PR #58 on the app repo.
 3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
+---
+
+## 2026-08-24 (QA2 — LOGIN-E2E-005)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-005` (P0) — "Both auth entry points render (Continue with Google, Enter your email)" — on a dedicated branch `feat/login-e2e-005`, following the reconnaissance that identified it as the strongest next automation candidate (emulator-safe, CI-stage-1-viable, zero state risk).
+
+### What was done
+
+- **Branch:** `feat/login-e2e-005` created off `master` (clean working tree confirmed first). No PR created, nothing pushed.
+- **Automation:** Replaced the `it.skip('LOGIN-E2E-005 ...')` stub in `tests/specs/auth/login-screen.spec.ts` with an active `it(...)` that:
+  - waits for the login screen via the existing `loginScreen.waitUntilDisplayed()`;
+  - asserts `loginScreen.continueWithGoogleButton` and `loginScreen.enterYourEmailButton` are displayed;
+  - deliberately taps neither button (the redirect behavior is `LOGIN-E2E-007`, the email toast `LOGIN-E2E-008`).
+  - Mirrors the existing `LOGIN-E2E-002` pattern. No new Screen Object methods, no new utilities, no change to `LOGIN-E2E-002`.
+- **Manual case authored:** `test-cases/auth/LOGIN-TC-005.md`, matching `LOGIN-TC-002.md`'s format and the `test-cases/README.md` traceability convention (`E2E` ↔ `TC`).
+- **Locators:** Reused the existing `continueWithGoogleButton` / `enterYourEmailButton` locators in `src/screens/login.screen.ts` (`byContentDesc('Continue with Google')` / `byContentDesc('Enter your email')`), which were confirmed live via `uiautomator dump` on 2026-08-04 and are already exercised (via `waitUntilDisplayed`) by the passing `LOGIN-E2E-002`.
+
+### Evidence / Validation
+
+- `npm run typecheck` → PASS
+- `npm run lint` → PASS
+- Test execution: `npm test -- --mochaOpts.grep="LOGIN-E2E-005"` executed successfully on the physical Samsung Galaxy A13 (`R58T90F5ALY`) → PASS. No emulator validation was performed — this validation was on the physical Galaxy A13.
+- Environment: a local `.env` was created from `.env.example`, with `PUKU_APK_PATH` configured to `...\apk\app-prod-release.apk`.
+
+### Notes
+
+- The QA2 contribution-log convention used on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid creating a new documentation system I appended this entry to the established `ai-log/daily-progress.md` instead.
+- `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast-mechanism spike; 005 requires the not-yet-existing Stage-2 authenticated-snapshot state).
