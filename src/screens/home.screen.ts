@@ -53,6 +53,22 @@ class HomeScreen extends BaseScreen {
   }
 
   /**
+   * The chat-composer model chip that shows the currently active model.
+   * Exposes the active model's name as its content-desc — verified live on
+   * the A13 (R58T90F5ALY) 2026-08-25: content-desc="puku-ai-2.7" before
+   * selection, and content-desc="Opus 4.8" immediately after selecting the
+   * Opus 4.8 option (the chip is the persistent selected-state signal; the
+   * open dialog exposes no selected/checked attribute on any option).
+   * Matched as the one ImageView whose content-desc is non-empty on the
+   * closed home screen (verified: it is the only such ImageView in the
+   * dump), so it resolves regardless of which model is currently active —
+   * unlike modelSelector, which pins to the "puku-ai" prefix.
+   */
+  get modelChip(): ChainablePromiseElement {
+    return $('//android.widget.ImageView[@content-desc != ""]');
+  }
+
+  /**
    * Matches any listed option from the "puku-ai" model family. Prefix-only,
    * same version-drift tolerance as modelSelector itself — does not pin an
    * exact version, and resolves to whichever matching entry appears first
@@ -88,6 +104,22 @@ class HomeScreen extends BaseScreen {
    */
   get chatInputField(): ChainablePromiseElement {
     return $('//android.widget.EditText[@hint="Chat with Puku..."]');
+  }
+
+  /**
+   * The chat input field matched by class only, for reading text back after
+   * typing. The hint-based chatInputField locator only matches while the
+   * field is empty — Flutter removes the hintText once text is present, so
+   * the @hint attribute disappears from the accessibility tree. Confirmed
+   * live on the A13 (R58T90F5ALY) on 2026-08-13: after typing "hello", the
+   * EditText node has text="hello" and no hint attribute, and getText() on
+   * the hint-based locator fails with "element wasn't found". This is the
+   * same root cause as CHAT-E2E-017's known "chatInputField not found"
+   * failure. There is exactly one EditText on the home screen, so matching
+   * by class is unambiguous here.
+   */
+  get chatInputFieldWithText(): ChainablePromiseElement {
+    return $('//android.widget.EditText');
   }
 
   /**
@@ -134,6 +166,18 @@ class HomeScreen extends BaseScreen {
     await this.modelSelector.click();
   }
 
+  /**
+   * Taps the composer model chip (modelChip) to open the model sheet. More
+   * robust than tapModelSelector() for CHAT-E2E-005 because it works
+   * regardless of which model is currently active (the chip content-desc
+   * may be a "puku-ai" model or "Opus ..." — modelChip matches non-empty
+   * ImageView content-desc). Kept as a separate method so tapModelSelector's
+   * existing behavior is unchanged.
+   */
+  async tapModelChip(): Promise<void> {
+    await this.modelChip.click();
+  }
+
   async dismissModelSelector(): Promise<void> {
     await this.modelSelectorScrim.click();
   }
@@ -142,9 +186,17 @@ class HomeScreen extends BaseScreen {
    * Focuses the chat input (opens the keyboard) then types via real
    * IME injection — WebdriverIO's setValue() silently fails on this
    * field, see ai-log/lessons-learned.md and src/utils/real-text-input.ts.
+   *
+   * Waits for the field to be displayed after the click before injecting
+   * text — adb's `input text` can drop early keystrokes if they arrive
+   * while the field is still gaining focus/keyboard (observed live on the
+   * A13 as intermittent short text after long messages, CHAT-E2E-014
+   * investigation 2026-08-13). Uses the shared waitForElement helper,
+   * same "wait for the marker, never sleep" discipline used elsewhere.
    */
   async typeChatMessage(text: string): Promise<void> {
     await this.chatInputField.click();
+    await this.waitForElement(this.chatInputField);
     typeRealText(text);
   }
 

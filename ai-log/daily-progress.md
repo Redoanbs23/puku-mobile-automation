@@ -271,7 +271,283 @@ Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-tr
 3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
 ---
 
-## 2026-08-25
+## 2026-08-12 (QA2 — CHAT-E2E-014)
+
+### Session Summary
+
+Joined the PUKU mobile automation project as QA2 with responsibility for the Chat-core P2/P3 backlog. Completed read-only reconnaissance for `CHAT-E2E-014` and created the feature branch.
+
+### What was done
+
+- Reviewed the assigned Chat-core scenarios:
+  - `CHAT-E2E-014` — new automation required.
+  - `CHAT-E2E-015` — partially automated; completion required.
+  - `CHAT-E2E-017` — blocked (device rotation + keyboard dismissal/accessibility).
+  - `CHAT-E2E-018` — manual-only; automation skipped.
+- Created branch `feat/chat-e2e-014`; confirmed local `master` synced with `origin/master`.
+- Reviewed the `CHAT-E2E-014`/`015` entries in `_bmad-output/test-artifacts/test-design-epic-chat-core.md`.
+- Verified the physical device (Samsung Galaxy A13, SM-A135F, `R58T90F5ALY`) connected via ADB; performed live UIAutomator inspection of the Chat screen; generated an UI hierarchy dump.
+- Confirmed the chat input is exposed to UiAutomator as `android.widget.EditText` (`resource-id=""`, `content-desc=""`, `bounds="[93,2011][987,2068]"`); the existing Screen Object already contains the hint-based locator `//android.widget.EditText[@hint="Chat with Puku..."]`.
+- Confirmed existing chat input interaction uses the `typeRealText()` workaround rather than relying solely on WebdriverIO `setValue()`.
+- Executed `npm run typecheck` (PASS) and `npm run lint` (PASS); ran an existing chat test (`new-chat.spec.ts`) → PASS on the physical A13.
+- Confirmed the mentor-provided `docs/source-analysis/` documentation is available locally.
+
+### Repository / Branch State
+
+- Working branch `feat/chat-e2e-014`; base `master`, synced with `origin/master`. No application/source/test implementation changes were committed on Day 1.
+- Day 1 contribution log was recorded later on this branch as a dedicated docs commit.
+
+### Findings / Decisions
+
+- Locator verification follows the project convention: inspect the live UI with UiAutomator rather than guessing selectors.
+- Reuse the existing `chatInputField` locator and the `typeRealText()` utility rather than duplicating them.
+- Existing passing chat tests and Screen Objects are the implementation pattern for `CHAT-E2E-014`.
+- `CHAT-E2E-015` to be investigated separately; `CHAT-E2E-017` remains blocked pending mentor guidance; `CHAT-E2E-018` remains manual-only.
+- Execution environment: physical Samsung Galaxy A13 only; emulator excluded because mentor approved physical-device-only validation due to local hardware limitations.
+
+### Next Steps
+
+- Review `docs/source-analysis/` documents relevant to Chat-core and `CHAT-E2E-014`.
+- Verify genuinely new locators live before implementing; implement; run on the physical device; run `typecheck`/`lint`; confirm clean/default state; update the manual test case.
+---
+
+## 2026-08-13 (QA2 — CHAT-E2E-014)
+
+### Session Summary
+
+Read-only recon plus implementation and physical-device validation attempt for `CHAT-E2E-014`. Discovered an Appium/WebdriverIO read-back limitation on the populated Flutter EditText, plus a framework-level contention making the raw ADB dump unusable inside an active Appium session. Ended the day with `CHAT-E2E-014` blocked pending mentor decision.
+
+### What was done
+
+- Completed read-only recon: read all 9 `docs/source-analysis/` docs; read `_bmad-output/test-artifacts/test-design-epic-chat-core.md` (CHAT-E2E-014 is P2, long-message input only, no send/no R8); inspected existing automation (screens, flows, utils, all chat specs, wdio configs, failure-capture hook, ai-log).
+- Implemented `tests/specs/chat/long-message.spec.ts` — types long synthetic message (`[PUKU-QA-TEST:CHAT-E2E-014]` + filler), asserts full text present, resets via `drawerScreen.newChatButton`, asserts home. Reused `homeScreen.typeChatMessage()` / `typeRealText()`.
+- Live locator verification on A13 (R58T90F5ALY): dumped UI hierarchy empty + after typing "hello".
+  - **Finding:** the hint-based `chatInputField` locator only matches while empty — Flutter removes hintText once text present, so the `@hint` attribute vanishes from the accessibility tree. `homeScreen.chatInputFieldWithText` (class-only `//android.widget.EditText`) added for post-typing read-back. Same root cause as CHAT-E2E-017's known failure.
+- Corrected payload to 328 chars (`FILLER_REPEATS = 75`: 300 filler + 28-char tag).
+- Read-back investigation:
+  - `getText()` / `getAttribute('text')` / page source all return **311** chars of the 328-char message (temporary probe spec, since removed).
+  - 10s `driver.waitUntil` re-read never reached 328 — the cap is **not** a transient read race.
+  - Standalone `adb shell uiautomator dump` holds the full 328 (5/5).
+- Final blocker: raw ADB dump cannot run inside an active Appium session — implemented temporary `dumpUiAutomatorXml()` (adb.ts) + `getChatInputRawText()` (home.screen.ts); both runs failed identically at `adb shell uiautomator dump ...` (non-zero exit) inside the live Appium test. Isolation evidence: same dump succeeds when Appium isn't running → **framework-level contention, not an app/code defect**.
+- Decision (Day 2 gate): stop + document as **automation blocker**; reverted all ADB-attempt changes to clean pre-ADB state.
+- End-of-day validation: typecheck PASS (clean), lint PASS (clean); the exact-assertion spec remains but **cannot pass** (Appium caps at 311). No commit.
+
+### Findings / Decisions
+
+- `chatInputField` is enough for typing (empty, hint present) but not for reading back (hint gone once text present). `chatInputFieldWithText` (class-only) is the minimal read locator.
+- `adb shell input text` comfortably handles 328 chars without shell-length limits.
+- Appium `getText()`/`getAttribute('text')`/`getPageSource()` cap at **311** for a populated Flutter EditText — read-back limitation, not an app defect.
+- Standalone dump sees 328 but cannot run reliably inside an active Appium session (framework contention).
+- `CHAT-E2E-014` **blocked on physical A13** — not an app defect. `CHAT-E2E-015` recon-only (not implemented on this branch); `CHAT-E2E-017` blocked; `CHAT-E2E-018` manual-only.
+
+### Next Steps
+
+- Await QA2/mentor diff review / decision (app-side a11y fix OR re-scope approval). Do **not** open a PR until resolved.
+---
+
+## 2026-08-14 (QA2 — CHAT-E2E-014)
+
+### Session Summary
+
+Mentor-approved assertion re-scope for `CHAT-E2E-014` and final physical-device validation. The exact 328-char round-trip is not verifiable via the supported automation stack; re-scoped to no-crash + non-empty + exact-prefix-start. **PASS** on the physical device.
+
+### What was done
+
+- Mentor re-scope of assertion: exact 328-char round-trip not verifiable (Day-2 blocker), re-scoped to `no-crash + non-empty + exact prefix start`.
+- Inspected repo state, the authoritative test-design epic (CHAT-E2E-014: "Long message input accepted without crash/truncation issues" — no exact length specified), the current spec, and CHAT-TC-014.md before editing.
+- Answered five analysis questions; confirmed post-`deleteSession()` ADB dump path is **dead** (it would break the no-crash assertion, the clean-state reset, and the failure-capture/teardown hooks — all require a live Appium session).
+- Implemented **Candidate A** re-scoped assertion in `tests/specs/chat/long-message.spec.ts`:
+  - Still types the full 328-char payload via `homeScreen.typeChatMessage()` (typing path unchanged).
+  - **No-crash (primary):** `chatInputFieldWithText` displayed (a crash would remove the EditText).
+  - **No-crash (secondary):** `chatPromptHeading` displayed (Day-2 single probe snapshot evidence — not multi-run confirmed; noted in a comment).
+  - **Non-empty** entered text.
+  - **Exact prefix start:** begins with `[PUKU-QA-TEST:CHAT-E2E-014]`.
+- Updated `CHAT-TC-014.md` — status changed from "Blocked — Automation Blocker" to "Assertion re-scoped (mentor-approved, 2026-08-14)"; documented re-scoped assertion + accepted known limitation + full Day-2 blocker evidence.
+- **Physical-device validation (Samsung Galaxy A13, R58T90F5ALY):** ran `npx wdio run wdio.conf.ts --spec tests/specs/chat/long-message.spec.ts` → **PASS** (1 passing, 41s; Spec Files 1 passed/1 total, 100%). Confirmed: full 328-char payload exercised, no crash, re-scoped assertion passed, app left in clean/default state (New chat reset → home screen displayed). Run from the VSCode PowerShell terminal.
+- Validation: `npm run typecheck` PASS; `npm run lint` PASS.
+- No changes to `CHAT-E2E-002/015/017/018` or `ci.yml`.
+
+### Findings / Decisions
+
+- The strongest assertion the supported stack can reliably verify: no-crash (populated field displayed + home heading displayed) + non-empty + exact prefix start. It cannot catch app-side tail truncation beyond Appium's read window — an accepted, documented limitation of the re-scope.
+- The post-`deleteSession()` ADB dump path is not viable: it would break the no-crash assertion, the clean-state reset, and the failure-capture/teardown hooks (all require a live Appium session).
+- `chatPromptHeading` displayed in the populated state is supported by a single Day-2 probe page-source snapshot — treated as secondary evidence, not multi-run confirmed.
+
+### Blockers
+
+- No new blocker for `CHAT-E2E-014` after Day 3 (re-scope resolved the Day-2 automation blocker).
+- Existing blocker: `CHAT-E2E-017` (device rotation / keyboard dismissal / accessibility) — untouched.
+---
+
+## 2026-08-18 (QA2 — CHAT-E2E-015)
+
+### Session Summary
+
+Read-only reconnaissance for `CHAT-E2E-015` and began implementation planning. Confirmed the live locator evidence for the existing chat input and Settings navigation gaps.
+
+### What was done
+
+- Studied the PUKU mobile CI/CD pipeline: Stage 1 / Stage 2, triggers, secrets, runners, APK retrieval, emulator execution, reporting, and auth separation.
+- Reviewed the automation strategy and the proposed locator-health implementation approach with the mentor; identified open questions around interactive-node detection, exception matching, Settings navigation, and Flutter hierarchy behavior.
+- Performed live accessibility verification on Samsung Galaxy A13 via a live Appium session using `driver.getPageSource()`.
+- Verified Home/Drawer/Settings interactive elements.
+- Validated the proposed interactive-node rule:
+  `clickable="true" AND (focusable="true" OR hasUsableLocator)`
+- Confirmed the 7 previously approved `CHAT-E2E-015` exceptions:
+  1. Home hamburger trigger
+  2. Chat send control
+  3. Home incognito toggle
+  4. Home plus/attachments button
+  5. Home mic button
+  6. Home voice button
+  7. Settings back button
+- Settings contained **three** unlabeled interactive nodes: the Settings back button, the `Haptic feedback` switch child, and the `Information` action child.
+- The 7 known `CHAT-E2E-015` exceptions were confirmed.
+- The `Haptic feedback` switch was identified as an additional accessibility gap and escalated to the mentor.
+- Confirmed this switch exposes: `class="android.widget.Switch"`, `clickable="true"`, `focusable="true"`, empty content-desc, empty resource-id, empty text.
+- Confirmed it is a real tap target and is already covered by the existing parent-child XPath automation (from home's `settings.screen.ts` — `hapticFeedbackSwitch`).
+- The `Information` action child (`class="android.widget.Button"`, `clickable="true"`, `focusable="true"`, empty content-desc/resource-id/text) was present in the same Day 4 capture (`test-results/recon-015/settings.xml`) but was **overlooked during the initial Day 4 analysis**.
+  - This omission was corrected during Day 5 implementation/review — the Information node did **not** newly appear on Day 5.
+  - Did **not** silently add the Haptic feedback switch as an 8th approved exception.
+  - Did **not** alter the locator rule to weaken or hide the issue.
+  - Escalated the discrepancy to the mentor and **blocked `CHAT-E2E-015` implementation pending scope clarification**.
+
+### Status / Blockers
+
+- `CHAT-E2E-015` implementation remains blocked pending mentor/developer clarification regarding the **Haptic feedback switch**.
+- No `CHAT-E2E-015` implementation files were created.
+- No implementation commit was made.
+- No CI workflow changes were made.
+---
+
+## 2026-08-19 (QA2 — CHAT-E2E-015)
+
+### Session Summary
+
+Continued and finalized `CHAT-E2E-015` locator-health implementation. Corrected the approved exceptions list from eight to nine, verified the parser against fresh live page source on the physical A13, executed the spec (1 passing), and completed validation.
+
+### What was done
+
+- Continued `CHAT-E2E-015` locator-health implementation and finalization.
+- Corrected stale documentation from eight approved exceptions to nine, adding the **Settings Information action child**.
+- Independently validated that the earlier Settings XML analysis came from raw `driver.getPageSource()` output.
+- Captured fresh real Appium page source from the physical Samsung Galaxy A13 and verified XML entity behavior.
+- Confirmed `&#10;` entities were present but did not affect locator classification.
+- Confirmed the current parser correctly produced:
+  `Settings: interactive=11, unlabeled=3, unexpected=0`
+- Confirmed no real parser defect was demonstrated, so parser logic remained unchanged.
+- Executed the actual `CHAT-E2E-015` spec against the physical A13 (Samsung Galaxy A13, R58T90F5ALY).
+- **Test result: 1 passing.**
+- Verified Home, Drawer, and Settings locator-health checks.
+- Verified teardown returned from Settings to Home and the Home heading was displayed.
+- Confirmed the app was left in the normal/default Home state.
+- Ran `npm run typecheck` successfully.
+- Ran `npm run lint` successfully.
+- Performed final pre-commit implementation/diff review.
+- Confirmed no unrelated implementation changes, no temporary recon files, and no additional exception was silently introduced.
+
+### Status / Reconcile note (migration)
+
+- `contribution.md` recorded "No commit or PR created yet" on Day 5. **Since then the work has been committed and pushed on this branch (`feat/chat-e2e-015`) with an open PR.** The implementation (`tests/specs/chat/locator-health.spec.ts`, `src/utils/locator-health.ts`) and the manual test case update (`test-cases/chat/CHAT-TC-015.md`) are all present on the branch. No CI workflow changes were made.
+---
+
+## 2026-08-24 (QA2 — LOGIN-E2E-005)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-005` (P0) — "Both auth entry points render (Continue with Google, Enter your email)" — on a dedicated branch `feat/login-e2e-005`, following the reconnaissance that identified it as the strongest next automation candidate (emulator-safe, CI-stage-1-viable, zero state risk).
+
+### What was done
+
+- **Branch:** `feat/login-e2e-005` created off `master`.
+- **Automation:** Replaced the `it.skip('LOGIN-E2E-005 ...')` stub in `tests/specs/auth/login-screen.spec.ts` with an active `it(...)` that:
+  - waits for the login screen via the existing `loginScreen.waitUntilDisplayed()`;
+  - asserts `loginScreen.continueWithGoogleButton` and `loginScreen.enterYourEmailButton` are displayed;
+  - deliberately taps neither button (the redirect behavior is `LOGIN-E2E-007`, the email toast `LOGIN-E2E-008`).
+  - Mirrors the existing `LOGIN-E2E-002` pattern. No new Screen Object methods, no new utilities, no change to `LOGIN-E2E-002`.
+- **Manual case authored:** `test-cases/auth/LOGIN-TC-005.md`, matching `LOGIN-TC-002.md`'s format and the `test-cases/README.md` traceability convention (`E2E` ↔ `TC`).
+- **Locators:** Reused the existing `continueWithGoogleButton` / `enterYourEmailButton` locators in `src/screens/login.screen.ts` (`byContentDesc('Continue with Google')` / `byContentDesc('Enter your email')`), which were confirmed live via `uiautomator dump` on 2026-08-04 and are already exercised (via `waitUntilDisplayed`) by the passing `LOGIN-E2E-002`.
+
+### Evidence / Validation
+
+- `npm run typecheck` → PASS
+- `npm run lint` → PASS
+- Test execution: `npm test -- --mochaOpts.grep="LOGIN-E2E-005"` executed successfully on the physical Samsung Galaxy A13 (`R58T90F5ALY`) → PASS. No emulator validation was performed — this validation was on the physical Galaxy A13.
+- Environment: a local `.env` was created from `.env.example`, with `PUKU_APK_PATH` configured to `...\apk\app-prod-release.apk`.
+
+### Notes
+
+- The QA2 contribution-log convention used on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid creating a new documentation system I appended this entry to the established `ai-log/daily-progress.md` instead.
+- `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast-mechanism spike; 005 requires the not-yet-existing Stage-2 authenticated-snapshot state).
+---
+
+## 2026-08-24 (QA2 — LOGIN-E2E-008)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-008` (P0) — "Enter your email shows the 'not connected' snackbar (R1 regression guard)" on a dedicated branch `feat/login-e2e-008`, following the reconnaissance that confirmed it as the strongest next automation candidate (P0, emulator+CI-stage-1 viable, zero auth/state risk).
+
+### What was done
+
+- **Branch:** `feat/login-e2e-008` created off `master` (clean tree first; the temporary `__probe-008.spec.ts` reconnaissance probe was confirmed present before work started and **deleted before the work was complete**).
+- **Automation:** Replaced the `it.skip('LOGIN-E2E-008 ...')` stub in `tests/specs/auth/login-screen.spec.ts` with an active `it(...)` that:
+  - waits via the existing `loginScreen.waitUntilDisplayed()`;
+  - asserts `loginScreen.continueWithGoogleButton` and `loginScreen.enterYourEmailButton` are displayed;
+  - taps neither button (the redirect behavior is `LOGIN-E2E-007`; the email toast `LOGIN-E2E-008`); display-only.
+- **Manual case authored:** `test-cases/auth/LOGIN-TC-008.md`, matching `LOGIN-TC-002.md` conventions and the README traceability convention.
+- **Locators:** no new locators — verified/reused the existing `continueWithGoogleButton` / `enterYourEmailButton` locators (`byContentDesc('Continue with Google')` / `byContentDesc('Enter your email')`).
+- **New Screen Object getter:** added `emailNotConnectedSnackBar` in `src/screens/login.screen.ts` (accessibility-id `byContentDesc('Email sign-in flow is not connected yet')`), using the established BaseScreen convention.
+- **No new utilities, no CI/CD changes.**
+- **Manual case and progress documentation created.**
+
+### Evidence / Validation
+
+- `npm run typecheck` → **PASS** (authoritative)
+- `npm run lint` → **PASS** (authoritative)
+- Test<｜begin▁of▁file｜>
+- **Test execution:** The physical Samsung Galaxy A13 (`R58T90F5ALY`) was driven manually from the VS Code integrated PowerShell — command:
+  `$env:DEVICE_UDID="R58T90F5ALY"; $env:PUKU_APK_PATH="F:\BS23\puku-mobile-automation\puku-mobile-automation\apk\app-prod-release.apk"; npm test -- --mochaOpts.grep="LOGIN-E2E-008"`
+  - **Result: PASS** (SnackBar text located; live-verified).
+- **No emulator validation was performed.**
+
+### Notes
+
+- The QA2 contribution-log convention carried on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid inventing a new documentation lane I appended this entry to the established `ai-log/daily-progress.md` instead.
+- `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast/spike first; 005 requires the not-yet-existing Stage-2 authenticated snapshot).
+---
+
+## 2026-08-25 (QA2 — CHAT-E2E-005)
+
+### Session Summary
+
+Implemented `CHAT-E2E-005` (P1) — "Switching model doesn't crash the app; selection persists for the session" (R12/NFR-Reliability) — on branch `feat/chat-e2e-005`, completely from current master (independent of the open 014/015/005/008 PRs). **Verified passing on the physical Samsung Galaxy A13 (R58T90F5ALY).**
+
+### Locator evidence (live-verified on A13, 2026-08-25, no guessing)
+
+- Model-sheet option nodes are `android.view.View` with multi-line `content-desc` ("Opus 4.8\nFor complex tasks", "puku-ai-2.8\n…", "puku-ai-2.7\n…"), all `clickable=true`/`focusable=true`. The **open dialog exposes NO `selected`/`checked` indicator** on any option (all render `selected="false"`).
+- The persistent selected-state signal is the **closed-state composer model chip** — an `android.widget.ImageView` whose `content-desc` equals the active model name: `content-desc="puku-ai-2.7"` before, `content-desc="Opus 4.8"` after selecting Opus. This is the only non-empty-`content-desc` ImageView on the closed home screen.
+- Added `homeScreen.modelChip` (`//android.widget.ImageView[@content-desc != ""]`) + `homeScreen.tapModelChip()`; reused existing `modelSelectorDialogHeader`, `pukuAiModelOption`, `opusModelOption`.
+
+### Implementation
+
+- `src/screens/home.screen.ts`: added `modelChip` getter + `tapModelChip()` method (no change to existing `modelSelector`/`tapModelSelector`).
+- `tests/specs/chat/model-switch.spec.ts`: new `CHAT-E2E-005 @p1` — read current chip model → open selector → assert both model families present → select the non-active family (Opus) → dialog auto-closes → chip reflects new model (no crash) → navigate drawer→Chats→home → chip still shows new model (persistence).
+- `test-cases/chat/CHAT-TC-005.md`: status → Pass with the A13 evidence.
+
+### Validation (physical Samsung Galaxy A13, R58T90F5ALY)
+
+- `CHAT-E2E-005`: **PASS** (1 passing, 27.1s). Evidence trail: chip `puku-ai-2.7` → tap chip → `Select model` dialog → Opus option present → tapped Opus → home → chip `Opus 4.8` → Chats → Back → chip still `Opus 4.8`. No AI message sent (R8-safe).
+- `npm run typecheck` → PASS.
+- `npm run lint` → PASS (authoritative, VS Code terminal).
+- App left in clean/default post-login home state (model now Opus 4.8 — a benign, visible UI state, no teardown needed; no message/history side effects).
+
+### Notes / limitation
+
+- R12-tolerant: the test selects whichever model family is NOT currently active, so it is valid whether the default is a puku-ai or an Opus model. If only one family is available it is an account-state condition (CHAT-TC-005), and the "both options present" asserts fail with a clear message.
+- Persistence is scoped to in-session navigation only (per design); backgrounding/restart persistence is R15/CHAT-TC-019.
+---
+
+## 2026-08-25 (QA2 — LOGIN-E2E-007)
 
 ### Session Summary
 
@@ -299,3 +575,4 @@ Implemented, physically validated, and documented `LOGIN-E2E-007` — the R2 red
 
 - **Kept the redirect-only scope intact.** This scenario is deliberately the R2 boundary: it verifies the redirect to the external Chrome OAuth consent screen and stops — never authorizes, never sends.
 - **Device/account precondition documented.** Requires the pre-authenticated physical device `R58T90F5ALY` (`editorpuku@gmail.com`), ADR-006; skips in CI / fresh emulator.
+---
