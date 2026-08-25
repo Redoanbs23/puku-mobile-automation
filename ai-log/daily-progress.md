@@ -269,3 +269,33 @@ Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-tr
 1. Waiting on the app team to push a real version tag (unblocks the app repo's Build workflow, which has never run).
 2. Waiting on `smrefat02`'s review of PR #58 on the app repo.
 3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
+---
+
+## 2026-08-25
+
+### Session Summary
+
+Implemented, physically validated, and documented `LOGIN-E2E-007` — the R2 redirect-only Google OAuth lane: tapping "Continue with Google" from the logged-out login screen must redirect to the external Chrome OAuth consent screen (PUKU's own `puku.sh` page in a Chrome Custom Tab), and the test stops there without completing OAuth. Verified end-to-end on the physical device `R58T90F5ALY` (Samsung Galaxy A13, SM-A135F, Android 14).
+
+### Scenario
+
+- **ID / priority:** `LOGIN-E2E-007` / P1 (test-design-epic-auth-login.md coverage matrix).
+- **Risk:** R2 (Google OAuth not practically automatable) — this scenario is the accepted mitigation: verify the redirect only, never complete OAuth.
+- **Scope:** tap "Continue with Google" → external Chrome Custom Tab → PUKU OAuth consent page ("Authorize Puku App" button) → back out → logged-out login screen.
+
+### Chronological Log
+
+1. **Reconciled live behavior on the new device.** Reconnaissance on `R58T90F5ALY` confirmed the device carries the ADR-006 pre-authenticated Google state (`editorpuku@gmail.com`), so tapping "Continue with Google" lands on the one-tap PUKU consent page in a Chrome Custom Tab — not full Google credential entry. Existing locators (`loginScreen.continueWithGoogleButton`, `oauthConsentScreen.authorizeButton`) were live-verified on this device and reused as-is; no locator guessing.
+
+2. **Implemented `LOGIN-E2E-007`** in `tests/specs/auth/login-screen.spec.ts` (replacing the `it.skip` stub): waits for the logged-out login screen, taps "Continue with Google", asserts the app handed off to `com.android.chrome` (`driver.getCurrentPackage()`), asserts the OAuth consent screen via `oauthConsentScreen.waitUntilDisplayed()` + `expect(oauthConsentScreen.authorizeButton).toBeDisplayed()`, then backs out and confirms return to the login screen. The test never calls `tapAuthorize()` and never completes OAuth — the R2 boundary is enforced by construction. Skips itself when `DEVICE_UDID` is unset (mirrors `AUTH-E2E-015`).
+
+3. **Validated all project gates.** `npm run typecheck` — PASS; `npm run lint` — PASS; live automated run on the A13 (`DEVICE_UDID=R58T90F5ALY`, `--mochaOpts.grep=LOGIN-E2E-007`) — PASS (1 passing; step-by-step confirm of `com.android.chrome` redirect, "Authorize Puku App" button present `isElementDisplayed → true`, `back()`, login screen displayed again).
+
+4. **Manual validation — PASS.** The scenario was also exercised manually on the A13 (Samsung Galaxy A13, SM-A135F, Android 14): "Continue with Google" → Chrome Custom Tab → PUKU `puku.sh` consent page with "Authorize Puku App" → backed out → returned to logged-out login screen. No OAuth completed.
+
+5. **Authoring companion artifacts.** Created manual test case `test-cases/auth/LOGIN-TC-007.md` (format per test-cases/README.md) recording steps, expected/actual result, physical A13 validation, and final status **PASS**.
+
+### Key Decisions
+
+- **Kept the redirect-only scope intact.** This scenario is deliberately the R2 boundary: it verifies the redirect to the external Chrome OAuth consent screen and stops — never authorizes, never sends.
+- **Device/account precondition documented.** Requires the pre-authenticated physical device `R58T90F5ALY` (`editorpuku@gmail.com`), ADR-006; skips in CI / fresh emulator.
