@@ -15,7 +15,16 @@ describe('Login screen — P0/P1', () => {
     await expect(loginScreen.titleElement).toBeDisplayed();
   });
 
-  it.skip('LOGIN-E2E-005 @p0: both auth entry points render on the login screen', async () => {});
+  it('LOGIN-E2E-005 @p0: both auth entry points render on the login screen', async () => {
+    await loginScreen.waitUntilDisplayed();
+    // Both entry points are clean, single-value content-desc values — same
+    // class of stable locator as the title (confirmed via live uiautomator
+    // dump, 2026-08-04; see login.screen.ts). Display-only — deliberately
+    // does NOT tap either button, so no authentication is initiated (the
+    // redirect behavior itself is covered separately by LOGIN-E2E-007).
+    await expect(loginScreen.continueWithGoogleButton).toBeDisplayed();
+    await expect(loginScreen.enterYourEmailButton).toBeDisplayed();
+  });
 
   it.skip('LOGIN-E2E-006 @p1: all interactive elements expose usable content-desc locators', async () => {});
 
