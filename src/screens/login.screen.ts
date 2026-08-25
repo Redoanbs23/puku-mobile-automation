@@ -19,6 +19,18 @@ class LoginScreen extends BaseScreen {
     return this.byContentDesc('Enter your email');
   }
 
+  /**
+   * The transient SnackBar shown when "Enter your email" is tapped while the
+   * email sign-in flow is not wired up (R1 regression guard, LOGIN-E2E-008).
+   * Exposed as a Flutter semantics node with the message in its content-desc
+   * (live-verified 2026-08-24 on physical A13: class android.view.View,
+   * text="", content-desc="Email sign-in flow is not connected yet").
+   * Temporary — remove when email sign-in ships and this guard is retired.
+   */
+  get emailNotConnectedSnackBar(): ChainablePromiseElement {
+    return this.byContentDesc('Email sign-in flow is not connected yet');
+  }
+
   async waitUntilDisplayed(timeout = 10000): Promise<void> {
     await this.waitForElement(this.continueWithGoogleButton, timeout);
   }

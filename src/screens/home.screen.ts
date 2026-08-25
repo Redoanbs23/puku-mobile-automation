@@ -53,6 +53,22 @@ class HomeScreen extends BaseScreen {
   }
 
   /**
+   * The chat-composer model chip that shows the currently active model.
+   * Exposes the active model's name as its content-desc — verified live on
+   * the A13 (R58T90F5ALY) 2026-08-25: content-desc="puku-ai-2.7" before
+   * selection, and content-desc="Opus 4.8" immediately after selecting the
+   * Opus 4.8 option (the chip is the persistent selected-state signal; the
+   * open dialog exposes no selected/checked attribute on any option).
+   * Matched as the one ImageView whose content-desc is non-empty on the
+   * closed home screen (verified: it is the only such ImageView in the
+   * dump), so it resolves regardless of which model is currently active —
+   * unlike modelSelector, which pins to the "puku-ai" prefix.
+   */
+  get modelChip(): ChainablePromiseElement {
+    return $('//android.widget.ImageView[@content-desc != ""]');
+  }
+
+  /**
    * Matches any listed option from the "puku-ai" model family. Prefix-only,
    * same version-drift tolerance as modelSelector itself — does not pin an
    * exact version, and resolves to whichever matching entry appears first
@@ -148,6 +164,18 @@ class HomeScreen extends BaseScreen {
 
   async tapModelSelector(): Promise<void> {
     await this.modelSelector.click();
+  }
+
+  /**
+   * Taps the composer model chip (modelChip) to open the model sheet. More
+   * robust than tapModelSelector() for CHAT-E2E-005 because it works
+   * regardless of which model is currently active (the chip content-desc
+   * may be a "puku-ai" model or "Opus ..." — modelChip matches non-empty
+   * ImageView content-desc). Kept as a separate method so tapModelSelector's
+   * existing behavior is unchanged.
+   */
+  async tapModelChip(): Promise<void> {
+    await this.modelChip.click();
   }
 
   async dismissModelSelector(): Promise<void> {
