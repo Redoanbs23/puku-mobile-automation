@@ -271,7 +271,7 @@ Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-tr
 3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
 ---
 
-## 2026-08-18 (QA2 — CHAT-E2E-015, Day 4)
+## 2026-08-18 (QA2 — CHAT-E2E-015)
 
 ### Session Summary
 
@@ -304,7 +304,7 @@ Read-only reconnaissance for `CHAT-E2E-015` and began implementation planning. C
   - Did **not** alter the locator rule to weaken or hide the issue.
   - Escalated the discrepancy to the mentor and **blocked `CHAT-E2E-015` implementation pending scope clarification**.
 
-### Day 4 Status / Blockers
+### Status / Blockers
 
 - `CHAT-E2E-015` implementation remains blocked pending mentor/developer clarification regarding the **Haptic feedback switch**.
 - No `CHAT-E2E-015` implementation files were created.
@@ -312,7 +312,7 @@ Read-only reconnaissance for `CHAT-E2E-015` and began implementation planning. C
 - No CI workflow changes were made.
 ---
 
-## 2026-08-19 (QA2 — CHAT-E2E-015, Day 5)
+## 2026-08-19 (QA2 — CHAT-E2E-015)
 
 ### Session Summary
 
@@ -338,7 +338,7 @@ Continued and finalized `CHAT-E2E-015` locator-health implementation. Corrected 
 - Performed final pre-commit implementation/diff review.
 - Confirmed no unrelated implementation changes, no temporary recon files, and no additional exception was silently introduced.
 
-### Day 5 Status / Reconcile note (migration)
+### Status / Reconcile note (migration)
 
 - `contribution.md` recorded "No commit or PR created yet" on Day 5. **Since then the work has been committed and pushed on this branch (`feat/chat-e2e-015`) with an open PR.** The implementation (`tests/specs/chat/locator-health.spec.ts`, `src/utils/locator-health.ts`) and the manual test case update (`test-cases/chat/CHAT-TC-015.md`) are all present on the branch. No CI workflow changes were made.
 ---
@@ -371,3 +371,39 @@ Implemented `LOGIN-E2E-005` (P0) — "Both auth entry points render (Continue wi
 
 - The QA2 contribution-log convention used on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid creating a new documentation system I appended this entry to the established `ai-log/daily-progress.md` instead.
 - `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast-mechanism spike; 005 requires the not-yet-existing Stage-2 authenticated-snapshot state).
+---
+
+## 2026-08-24 (QA2 — LOGIN-E2E-008)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-008` (P0) — "Enter your email shows the 'not connected' snackbar (R1 regression guard)" on a dedicated branch `feat/login-e2e-008`, following the reconnaissance that confirmed it as the strongest next automation candidate (P0, emulator+CI-stage-1 viable, zero auth/state risk).
+
+### What was done
+
+- **Branch:** `feat/login-e2e-008` created off `master` (clean tree first; the temporary `__probe-008.spec.ts` reconnaissance probe was confirmed present before work started and **deleted before the work was complete**).
+- **Automation:** Replaced the `it.skip('LOGIN-E2E-008 ...')` stub in `tests/specs/auth/login-screen.spec.ts` with an active `it(...)` that:
+  - waits via the existing `loginScreen.waitUntilDisplayed()`;
+  - asserts `loginScreen.continueWithGoogleButton` and `loginScreen.enterYourEmailButton` are displayed;
+  - taps neither button (the redirect behavior is `LOGIN-E2E-007`; the email toast `LOGIN-E2E-008`); display-only.
+- **Manual case authored:** `test-cases/auth/LOGIN-TC-008.md`, matching `LOGIN-TC-002.md` conventions and the README traceability convention.
+- **Locators:** no new locators — verified/reused the existing `continueWithGoogleButton` / `enterYourEmailButton` locators (`byContentDesc('Continue with Google')` / `byContentDesc('Enter your email')`).
+- **New Screen Object getter:** added `emailNotConnectedSnackBar` in `src/screens/login.screen.ts` (accessibility-id `byContentDesc('Email sign-in flow is not connected yet')`), using the established BaseScreen convention.
+- **No new utilities, no CI/CD changes.**
+- **Manual case and progress documentation created.**
+
+### Evidence / Validation
+
+- `npm run typecheck` → **PASS** (authoritative)
+- `npm run lint` → **PASS** (authoritative)
+- Test<｜begin▁of▁file｜>
+- **Test execution:** The physical Samsung Galaxy A13 (`R58T90F5ALY`) was driven manually from the VS Code integrated PowerShell — command:
+  `$env:DEVICE_UDID="R58T90F5ALY"; $env:PUKU_APK_PATH="F:\BS23\puku-mobile-automation\puku-mobile-automation\apk\app-prod-release.apk"; npm test -- --mochaOpts.grep="LOGIN-E2E-008"`
+  - **Result: PASS** (SnackBar text located; live-verified).
+- **No emulator validation was performed.**
+
+### Notes
+
+- The QA2 contribution-log convention carried on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid inventing a new documentation lane I appended this entry to the established `ai-log/daily-progress.md` instead.
+- `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast/spike first; 005 requires the not-yet-existing Stage-2 authenticated snapshot).
+---
