@@ -269,3 +269,75 @@ Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-tr
 1. Waiting on the app team to push a real version tag (unblocks the app repo's Build workflow, which has never run).
 2. Waiting on `smrefat02`'s review of PR #58 on the app repo.
 3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
+---
+
+## 2026-08-18 (QA2 — CHAT-E2E-015, Day 4)
+
+### Session Summary
+
+Read-only reconnaissance for `CHAT-E2E-015` and began implementation planning. Confirmed the live locator evidence for the existing chat input and Settings navigation gaps.
+
+### What was done
+
+- Studied the PUKU mobile CI/CD pipeline: Stage 1 / Stage 2, triggers, secrets, runners, APK retrieval, emulator execution, reporting, and auth separation.
+- Reviewed the automation strategy and the proposed locator-health implementation approach with the mentor; identified open questions around interactive-node detection, exception matching, Settings navigation, and Flutter hierarchy behavior.
+- Performed live accessibility verification on Samsung Galaxy A13 via a live Appium session using `driver.getPageSource()`.
+- Verified Home/Drawer/Settings interactive elements.
+- Validated the proposed interactive-node rule:
+  `clickable="true" AND (focusable="true" OR hasUsableLocator)`
+- Confirmed the 7 previously approved `CHAT-E2E-015` exceptions:
+  1. Home hamburger trigger
+  2. Chat send control
+  3. Home incognito toggle
+  4. Home plus/attachments button
+  5. Home mic button
+  6. Home voice button
+  7. Settings back button
+- Settings contained **three** unlabeled interactive nodes: the Settings back button, the `Haptic feedback` switch child, and the `Information` action child.
+- The 7 known `CHAT-E2E-015` exceptions were confirmed.
+- The `Haptic feedback` switch was identified as an additional accessibility gap and escalated to the mentor.
+- Confirmed this switch exposes: `class="android.widget.Switch"`, `clickable="true"`, `focusable="true"`, empty content-desc, empty resource-id, empty text.
+- Confirmed it is a real tap target and is already covered by the existing parent-child XPath automation (from home's `settings.screen.ts` — `hapticFeedbackSwitch`).
+- The `Information` action child (`class="android.widget.Button"`, `clickable="true"`, `focusable="true"`, empty content-desc/resource-id/text) was present in the same Day 4 capture (`test-results/recon-015/settings.xml`) but was **overlooked during the initial Day 4 analysis**.
+  - This omission was corrected during Day 5 implementation/review — the Information node did **not** newly appear on Day 5.
+  - Did **not** silently add the Haptic feedback switch as an 8th approved exception.
+  - Did **not** alter the locator rule to weaken or hide the issue.
+  - Escalated the discrepancy to the mentor and **blocked `CHAT-E2E-015` implementation pending scope clarification**.
+
+### Day 4 Status / Blockers
+
+- `CHAT-E2E-015` implementation remains blocked pending mentor/developer clarification regarding the **Haptic feedback switch**.
+- No `CHAT-E2E-015` implementation files were created.
+- No implementation commit was made.
+- No CI workflow changes were made.
+---
+
+## 2026-08-19 (QA2 — CHAT-E2E-015, Day 5)
+
+### Session Summary
+
+Continued and finalized `CHAT-E2E-015` locator-health implementation. Corrected the approved exceptions list from eight to nine, verified the parser against fresh live page source on the physical A13, executed the spec (1 passing), and completed validation.
+
+### What was done
+
+- Continued `CHAT-E2E-015` locator-health implementation and finalization.
+- Corrected stale documentation from eight approved exceptions to nine, adding the **Settings Information action child**.
+- Independently validated that the earlier Settings XML analysis came from raw `driver.getPageSource()` output.
+- Captured fresh real Appium page source from the physical Samsung Galaxy A13 and verified XML entity behavior.
+- Confirmed `&#10;` entities were present but did not affect locator classification.
+- Confirmed the current parser correctly produced:
+  `Settings: interactive=11, unlabeled=3, unexpected=0`
+- Confirmed no real parser defect was demonstrated, so parser logic remained unchanged.
+- Executed the actual `CHAT-E2E-015` spec against the physical A13 (Samsung Galaxy A13, R58T90F5ALY).
+- **Test result: 1 passing.**
+- Verified Home, Drawer, and Settings locator-health checks.
+- Verified teardown returned from Settings to Home and the Home heading was displayed.
+- Confirmed the app was left in the normal/default Home state.
+- Ran `npm run typecheck` successfully.
+- Ran `npm run lint` successfully.
+- Performed final pre-commit implementation/diff review.
+- Confirmed no unrelated implementation changes, no temporary recon files, and no additional exception was silently introduced.
+
+### Day 5 Status / Reconcile note (migration)
+
+- `contribution.md` recorded "No commit or PR created yet" on Day 5. **Since then the work has been committed and pushed on this branch (`feat/chat-e2e-015`) with an open PR.** The implementation (`tests/specs/chat/locator-health.spec.ts`, `src/utils/locator-health.ts`) and the manual test case update (`test-cases/chat/CHAT-TC-015.md`) are all present on the branch. No CI workflow changes were made.
