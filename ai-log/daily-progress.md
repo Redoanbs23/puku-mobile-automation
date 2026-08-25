@@ -407,3 +407,34 @@ Implemented `LOGIN-E2E-008` (P0) — "Enter your email shows the 'not connected'
 - The QA2 contribution-log convention carried on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid inventing a new documentation lane I appended this entry to the established `ai-log/daily-progress.md` instead.
 - `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast/spike first; 005 requires the not-yet-existing Stage-2 authenticated snapshot).
 ---
+
+## 2026-08-25 (QA2 — CHAT-E2E-005)
+
+### Session Summary
+
+Implemented `CHAT-E2E-005` (P1) — "Switching model doesn't crash the app; selection persists for the session" (R12/NFR-Reliability) — on branch `feat/chat-e2e-005`, completely from current master (independent of the open 014/015/005/008 PRs). **Verified passing on the physical Samsung Galaxy A13 (R58T90F5ALY).**
+
+### Locator evidence (live-verified on A13, 2026-08-25, no guessing)
+
+- Model-sheet option nodes are `android.view.View` with multi-line `content-desc` ("Opus 4.8\nFor complex tasks", "puku-ai-2.8\n…", "puku-ai-2.7\n…"), all `clickable=true`/`focusable=true`. The **open dialog exposes NO `selected`/`checked` indicator** on any option (all render `selected="false"`).
+- The persistent selected-state signal is the **closed-state composer model chip** — an `android.widget.ImageView` whose `content-desc` equals the active model name: `content-desc="puku-ai-2.7"` before, `content-desc="Opus 4.8"` after selecting Opus. This is the only non-empty-`content-desc` ImageView on the closed home screen.
+- Added `homeScreen.modelChip` (`//android.widget.ImageView[@content-desc != ""]`) + `homeScreen.tapModelChip()`; reused existing `modelSelectorDialogHeader`, `pukuAiModelOption`, `opusModelOption`.
+
+### Implementation
+
+- `src/screens/home.screen.ts`: added `modelChip` getter + `tapModelChip()` method (no change to existing `modelSelector`/`tapModelSelector`).
+- `tests/specs/chat/model-switch.spec.ts`: new `CHAT-E2E-005 @p1` — read current chip model → open selector → assert both model families present → select the non-active family (Opus) → dialog auto-closes → chip reflects new model (no crash) → navigate drawer→Chats→home → chip still shows new model (persistence).
+- `test-cases/chat/CHAT-TC-005.md`: status → Pass with the A13 evidence.
+
+### Validation (physical Samsung Galaxy A13, R58T90F5ALY)
+
+- `CHAT-E2E-005`: **PASS** (1 passing, 27.1s). Evidence trail: chip `puku-ai-2.7` → tap chip → `Select model` dialog → Opus option present → tapped Opus → home → chip `Opus 4.8` → Chats → Back → chip still `Opus 4.8`. No AI message sent (R8-safe).
+- `npm run typecheck` → PASS.
+- `npm run lint` → PASS (authoritative, VS Code terminal).
+- App left in clean/default post-login home state (model now Opus 4.8 — a benign, visible UI state, no teardown needed; no message/history side effects).
+
+### Notes / limitation
+
+- R12-tolerant: the test selects whichever model family is NOT currently active, so it is valid whether the default is a puku-ai or an Opus model. If only one family is available it is an account-state condition (CHAT-TC-005), and the "both options present" asserts fail with a clear message.
+- Persistence is scoped to in-session navigation only (per design); backgrounding/restart persistence is R15/CHAT-TC-019.
+---
