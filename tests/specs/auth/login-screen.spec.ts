@@ -1,5 +1,8 @@
+
 import { loginScreen } from '../../../src/screens/login.screen.js';
 import { oauthConsentScreen } from '../../../src/screens/oauth-consent.screen.js';
+import { analyzePageSource } from '../../../src/utils/locator-health.js';
+import { expectUnexpected } from '../chat/locator-health.spec.js';
 
 /**
  * P0/P1 scenarios from test-design-epic-auth-login.md's coverage matrix.
@@ -27,7 +30,43 @@ describe('Login screen — P0/P1', () => {
     await expect(loginScreen.enterYourEmailButton).toBeDisplayed();
   });
 
-  it.skip('LOGIN-E2E-006 @p1: all interactive elements expose usable content-desc locators', async () => {});
+  /**
+   * LOGIN-E2E-006 @p1: all interactive elements on the login screen expose
+   * usable locators.
+   *
+   * P1 (test-design-epic-auth-login.md coverage matrix) — R4 early-warning
+   * signal for silent accessibility-tree regressions on the login screen.
+   * Reuses the locator-health analyzer from CHAT-E2E-015
+   * (src/utils/locator-health.ts), extended with a 'login' branch.
+   *
+   * Live-verified on the Samsung Galaxy A13 (R58T90F5ALY) 2026-08-26: the
+   * logged-out login screen has exactly 5 interactive nodes (Continue with
+   * Google, Enter your email, Consumer Terms, Usage Policy,, Privacy
+   * Policy), every one of which exposes a content-desc. Zero approved
+   * exceptions are needed for the Login screen — the analyzer treats any
+   * unlabeled interactive node as unexpected by definition.
+   *
+   * Display-only: this test never taps Continue with Google (covered by
+   * LOGIN-E2E-007) and never taps Enter your email (covered by
+   * LOGIN-E2E-008), so no authentication is initiated. It leaves the app
+   * on the logged-out login screen — the clean default precondition for
+   * every other login-screen scenario.
+   *
+   * Self-skips when DEVICE_UDID is unset (CI / fresh emulator) because the
+   * live UiAutomator tree is what this scenario validates — the analyzer
+   * itself is pure, but the input data is real-device-only here. Matches
+   * the established pattern in tests/specs/chat/locator-health.spec.ts.
+   */
+  it('LOGIN-E2E-006 @p1: all interactive elements on the login screen expose usable locators', async function () {
+    if (!process.env.DEVICE_UDID) {
+      this.skip();
+    }
+
+    await loginScreen.waitUntilDisplayed();
+
+    const report = analyzePageSource(await driver.getPageSource(), 'login');
+    expectUnexpected(report.unexpected, 'Login', 'LOGIN-E2E-006');
+  });
 
   /**
    * LOGIN-E2E-007 @p1 (R2 lane): tapping "Continue with Google" redirects the
