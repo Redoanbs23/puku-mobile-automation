@@ -64,8 +64,17 @@ describe('Locator health — P2', () => {
 /**
  * Fails the test if any unexpected unlabeled interactive node was found,
  * with a triage-friendly description of each offending node.
+ *
+ * Shared with `LOGIN-E2E-006` (tests/specs/auth/login-screen.spec.ts) so a
+ * single helper enforces the same triage-friendly error format for every
+ * locator-health check. The `scenarioId` is purely for the error prefix so
+ * each spec's failure log identifies itself unambiguously.
  */
-function expectUnexpected(nodes: UnlabeledInteractiveNode[], screenLabel: string): void {
+export function expectUnexpected(
+  nodes: UnlabeledInteractiveNode[],
+  screenLabel: string,
+  scenarioId = 'CHAT-E2E-015',
+): void {
   if (nodes.length === 0) {
     return;
   }
@@ -80,8 +89,8 @@ function expectUnexpected(nodes: UnlabeledInteractiveNode[], screenLabel: string
     .join('\n');
 
   throw new Error(
-    `CHAT-E2E-015: ${nodes.length} interactive node(s) on ${screenLabel} have no usable locator ` +
-      `(content-desc, resource-id, text, or hint) and are not one of the nine approved exceptions.\n` +
+    `${scenarioId}: ${nodes.length} interactive node(s) on ${screenLabel} have no usable locator ` +
+      `(content-desc, resource-id, text, or hint) and are not one of the approved exceptions.\n` +
       `This may indicate a silent accessibility-tree regression (R4).\n${details}`,
   );
 }

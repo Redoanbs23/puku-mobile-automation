@@ -1,5 +1,6 @@
 /**
- * CHAT-E2E-015 locator health-check helper.
+ * Locator health-check helper for CHAT-E2E-015 (Home / Drawer / Settings) and
+ * LOGIN-E2E-006 (Login).
  *
  * Parses the UiAutomator2 XML returned by driver.getPageSource() and
  * identifies interactive nodes that lack a usable locator, excluding the
@@ -15,10 +16,15 @@
  * attribute (home.screen.ts chatInputField:
  * //android.widget.EditText[@hint="Chat with Puku..."]).
  *
+ * The Login screen (LOGIN-E2E-006, live-verified on A13, 2026-08-26) has
+ * five interactive nodes — all of them expose a usable content-desc — so
+ * the Login branch has zero approved exceptions; it is structurally the
+ * same "any unlabeled node is unexpected" shape as the Drawer branch.
+ *
  * This utility is pure (parse + analyze) and does not navigate the app.
  */
 
-export type ScreenName = 'home' | 'drawer' | 'settings';
+export type ScreenName = 'home' | 'drawer' | 'settings' | 'login';
 
 export interface AccessibilityNode {
   className: string;
@@ -264,6 +270,13 @@ export function analyzePageSource(source: string, screen: ScreenName): LocatorHe
     unexpected = unlabeled.length > HOME_APPROVED_UNLABELED_COUNT ? unlabeled : [];
   } else if (screen === 'drawer') {
     // No approved exceptions on the Drawer.
+    unexpected = unlabeled;
+  } else if (screen === 'login') {
+    // Login: no approved exceptions — every interactive element on the
+    // login screen (verified live on the Samsung Galaxy A13, 2026-08-26:
+    // Continue with Google, Enter your email, Consumer Terms, Usage Policy,,
+    // Privacy Policy) exposes a usable content-desc. Any unlabeled
+    // interactive node is unexpected by definition.
     unexpected = unlabeled;
   } else {
     // Settings: three approved exceptions with specific structural matchers.

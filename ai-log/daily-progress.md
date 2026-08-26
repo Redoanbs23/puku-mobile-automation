@@ -575,4 +575,67 @@ Implemented, physically validated, and documented `LOGIN-E2E-007` — the R2 red
 
 - **Kept the redirect-only scope intact.** This scenario is deliberately the R2 boundary: it verifies the redirect to the external Chrome OAuth consent screen and stops — never authorizes, never sends.
 - **Device/account precondition documented.** Requires the pre-authenticated physical device `R58T90F5ALY` (`editorpuku@gmail.com`), ADR-006; skips in CI / fresh emulator.
+
+---
+
+## 2026-08-26 (QA2 — LOGIN-E2E-006)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-006` (P1) — "All interactive elements on the login screen expose usable accessibility/automation locators" (R4 mitigation) — on a dedicated branch `feat/login-e2e-006` from current master, reusing the locator-health infrastructure already in place for `CHAT-E2E-015`. **Verified passing on the physical Samsung Galaxy A13 (`R58T90F5ALY`).**
+
+### Live locator findings (physical A13, R58T90F5ALY, 2026-08-26)
+
+Live verification on the logged-out login screen via `driver.getPageSource()` and a follow-up ScrollView swipe revealed **exactly 5 interactive nodes**, all with `clickable="true"` and a usable `content-desc`:
+
+| # | content-desc |
+|---|---|
+| 1 | `Continue with Google` (ImageView) |
+| 2 | `Enter your email` (Button) |
+| 3 | `Consumer Terms` (View) |
+| 4 | `Usage Policy,` (View, note trailing comma) |
+| 5 | `Privacy Policy` (View) |
+
+**Zero unlabeled interactive nodes. Zero approved exceptions needed.** The Login screen's locator surface is strictly cleaner than Home's (5 unlabeled exceptions) or Settings's (3 unlabeled exceptions).
+
+A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.md` §S-02 but is **not** present in the live build's login screen — §S-02 is stale for that element. `LOGIN-E2E-006` does not assert the menu icon (would be a false-positive failure on the current build).
+
+### What was done
+
+- **Branch:** `feat/login-e2e-006` created off `master`.
+- **Login-screen logout precondition:** Reached the login screen without re-auth by running the existing `AUTH-E2E-016` logout scenario.
+- **Analyzer extension** (`src/utils/locator-health.ts`):
+  - `ScreenName` union extended: `'home' | 'drawer' | 'settings'` → `'home' | 'drawer' | 'settings' | 'login'`.
+  - `analyzePageSource()` gained a `screen === 'login'` branch (same shape as the `'drawer'` pass-through — no approved exceptions).
+  - `APPROVED_EXCEPTIONS` array **unchanged** (still 9 entries: 5 Home, 3 Settings, 0 Login).
+  - Header doc comment updated to reflect shared use by CHAT-E2E-015 and LOGIN-E2E-006.
+- **Helper sharing** (`tests/specs/chat/locator-health.spec.ts`):
+  - Exported `expectUnexpected` and added an optional `scenarioId` parameter (defaulted to `'CHAT-E2E-015'`) so its error prefix identifies the calling scenario.
+  - Hard-coded "nine approved exceptions" softened to "the approved exceptions" to fit a Login screen that has none (still semantically correct for Settings, which still has 3 in the same call site).
+- **Automation** (`tests/specs/auth/login-screen.spec.ts`):
+  - Replaced the `it.skip('LOGIN-E2E-006 ...')` stub with an active `it(...)`.
+  - Self-skips when `DEVICE_UDID` is unset (matches the established pattern in `tests/specs/chat/locator-health.spec.ts`).
+  - Waits for the login screen via `loginScreen.waitUntilDisplayed()`, reads `driver.getPageSource()`, calls `analyzePageSource(source, 'login')`, and passes the result through `expectUnexpected`.
+  - **Display-only:** never taps Continue with Google (covered by LOGIN-E2E-007) and never taps Enter your email (covered by LOGIN-E2E-008). No authentication is initiated. App is left on the logged-out login screen — the clean default precondition.
+- **Manual test case:** Created `test-cases/auth/LOGIN-TC-006.md` matching `LOGIN-TC-007.md`'s structure and `test-cases/README.md`'s template (P1, R4 link, automated-test link, Preconditions/Steps/Expected Result/Actual Result/Status=Pass/Notes).
+- **No new Screen Object methods**, **no new utilities**, **no CI/CD changes**, **no staged `.puku-cli/` artifacts**.
+
+### Evidence / Validation
+
+- `npm run typecheck` → **PASS** (authoritative, no output, exit 0).
+- `npm run lint` → **PASS** (authoritative, no output, exit 0).
+- Physical-device test execution on the Samsung Galaxy A13 (`R58T90F5ALY`):
+  - Command: `DEVICE_UDID=R58T90F5ALY npm test -- --mochaOpts.grep="LOGIN-E2E-006"`.
+  - Result: **PASS** — `1 passing (2.9s)`; Spec Files: 1 passed, 18 skipped, 19 total (100% completed) in 00:01:51.
+  - Confirmed: only the targeted scenario ran; the analyzer reported `unexpected = []`; no tap was performed; no AI message was sent.
+  - App left in clean/default logged-out login screen state.
+- A13 intentionally remains logged out; `AUTH-E2E-016` can re-establish login state for subsequent work.
+- `git status` clean apart from intended diff (`src/utils/locator-health.ts`, `tests/specs/auth/login-screen.spec.ts`, `tests/specs/chat/locator-health.spec.ts`) and the new `test-cases/auth/LOGIN-TC-006.md`. `.puku-cli/` reconnaissance artifacts remain untracked.
+
+### Notes / limitation
+
+- **Login is a stronger locator-health invariant than Home/Settings.** Home has 5 approved unlabeled exceptions, Settings has 3, Login has 0 — meaning Login's PASS line is a *stricter* signal than CHAT-E2E-015's, not a weaker one. Future app builds that regress Login's content-desc exposure will fail this scenario immediately.
+- **`expectUnexpected` was hoisted from `tests/specs/chat/locator-health.spec.ts` rather than moved to a new shared utility file**, because the helper is small, tightly bound to the locator-health domain, and only has two callers. A third caller would justify hoisting.
+- **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
+- **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
 ---
