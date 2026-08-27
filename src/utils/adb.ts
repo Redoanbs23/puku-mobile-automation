@@ -83,3 +83,34 @@ export function pullFile(devicePath: string, localPath: string): void {
 export function removeDeviceFile(devicePath: string): void {
   execSync(adbCommand('shell', 'rm', '-f', devicePath));
 }
+
+/**
+ * Toggles the device's Wi-Fi radio via `adb shell svc wifi` (the Android
+ * Service Manager facade; reachable by the shell user without root).
+ * Same shape as the rest of this module: `deviceArgs()` resolves the
+ * target (-s <DEVICE_UDID> when set), `adbCommand(...)` joins the args
+ * with spaces, and `execSync(...)` blocks until the service answers.
+ *
+ * Capability verified live on the physical Samsung Galaxy A13
+ * (`R58T90F5ALY`, Android 14) on 2026-08-27: `svc wifi disable` flips
+ * `settings get global wifi_on` to 0 and `svc wifi enable` flips it back
+ * to 1 within ~2–4 s, with `ping -c 1 -W 2 1.1.1.1` confirming real L3
+ * connectivity within ~1 s of the next poll after re-enable.
+ *
+ * Does not touch cellular (`svc data`) or airplane mode
+ * (`cmd connectivity airplane-mode`) — wifi-only, so any unrelated
+ * telemetry the device emits during the cut window can still reach the
+ * network on the cellular radio. Suitable for use in a try/finally to
+ * guarantee Wi-Fi is restored even on an assertion-failure exit path;
+ * callers MUST pair a `setWifiEnabled(false)` with a `setWifiEnabled(true)`
+ * in the `finally`, otherwise the next test in the run inherits a cut
+ * radio and any subsequent live-instrumentation step (screenshot, video,
+ * logcat pull) may stall.
+ *
+ * Added 2026-08-27 as part of CHAT-E2E-008 plumbing; the actual
+ * mid-send network-cut contract assertion remains pending live
+ * observation per `test-cases/chat/CHAT-TC-008.md`.
+ */
+export function setWifiEnabled(enabled: boolean): void {
+  execSync(adbCommand('shell', 'svc', 'wifi', enabled ? 'enable' : 'disable'));
+}

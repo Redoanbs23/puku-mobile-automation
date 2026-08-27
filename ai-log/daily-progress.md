@@ -638,4 +638,62 @@ A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.m
 - **`expectUnexpected` was hoisted from `tests/specs/chat/locator-health.spec.ts` rather than moved to a new shared utility file**, because the helper is small, tightly bound to the locator-health domain, and only has two callers. A third caller would justify hoisting.
 - **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
 - **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
+
+---
+
+## 2026-08-27 (QA2 — CHAT-E2E-008 reconnaissance + partial plumbing)
+
+### Session Summary
+
+Two manual reconnaissance runs against the physical Samsung Galaxy A13 (`R58T90F5ALY`, Android 14) to observe PUKU's actual network-failure UI before committing to a CHAT-E2E-008 spec. **Both runs were inconclusive** — the test message never reached the AI backend in either run, so the contract surface (graceful error, no crash) was not observed. **R8 budget preserved**: zero AI sends across both runs; the shared test account `editorpuku@gmail.com` has no new messages from this scenario. After the reconnaissance, **partial test plumbing was implemented**: `setWifiEnabled()` helper added to `src/utils/adb.ts`; new plumbing-only `tests/specs/chat/network-drop.spec.ts` created; `test-cases/chat/CHAT-TC-008.md` Status section updated. **Actual CHAT-E2E-008 contract remains unimplemented and pending a future R8-permitted session with verified-send preconditions.** No commit, no push.
+
+### Live reconnaissance — Run 1 (inconclusive)
+
+- **Procedure:** Tap the send control + immediately `adb shell svc wifi disable`, all from a single host-side dispatch. Capture the post-cut UI at three checkpoints (~2 s / ~8 s / ~20 s after the cut) via `adb shell uiautomator dump`.
+- **Pre-cut state:** A13 logged in to PUKU, on the home screen, input empty. Wi-Fi baseline = `settings get global wifi_on` returns `1`.
+- **Tap landed on the send control?** **No.** The send-tap coordinate (954, 1139) is documented in `home.screen.ts` (JSDoc lines 8–14) as only valid immediately after typing into `chatInputField` while the keyboard remains open. The keyboard was not open for this run, so the tap landed on an empty region of the home screen.
+- **Cut landed:** `settings get global wifi_on` → `0`. PUKU foreground unchanged (`mCurrentFocus=sh.puku.app`). App stayed on the home screen.
+- **XMLs captured:** `cut-now.xml`, `cut-8s.xml`, `cut-20s.xml`, `responsiveness.xml` (all in `evidence/008-recon-2026-08-27/`).
+- **Result:** All four XMLs byte-for-byte identical. Every `<node>` in the tree has `text=""`. `chatPromptHeading` present. `chatInputFieldWithText` (class-only `android.widget.EditText`) present at bounds `[93,2011][987,2068]`. **No user bubble. No response bubble. No error surface.**
+- **Conclusion:** The cut landed cleanly but there was nothing in flight to interrupt. Zero AI sends occurred (no inference cost incurred).
+
+### Live reconnaissance — Run 2 (corrected, still inconclusive)
+
+- **Procedure amended:** Before the tap+cut line, tap the chat input at its bounds center (540, 2040) to focus it and open the keyboard, then `adb shell input text '[PUKU-QA-TEST:CHAT-TC-008]%sSay%shello%sin%sone%sword.'` (spaces encoded as `%s`, same encoding `real-text-input.ts` uses live-validated in CHAT-TC-014). Then the same tap-send (954, 1139) + `svc wifi disable` pair as a single PowerShell dispatch. Screen recording started on the device at `/sdcard/post-cut.mp4` (60 s cap).
+- **Pre-cut re-verification skipped:** Did **not** re-check `mInputShown` between text-injection and send-tap, nor dump the UI to confirm the user bubble had appeared, nor dump the UI to confirm `text="[PUKU-QA-TEST:CHAT-TC-008] Say hello in one word."` was on the EditText. **This is the gap that caused the run to be inconclusive.**
+- **Cut landed:** `wifi_on` → `0`. PUKU foreground unchanged.
+- **XMLs captured:** Three checkpoint XMLs (same paths as Run 1) plus `responsiveness.xml`.
+- **Result:** All four XMLs byte-for-byte identical, same empty home state as Run 1. No user bubble. No response bubble. No error surface. **No in-flight conversation existed at any of the four capture points.**
+- **Screen recording:** Started at the cut, 60 s cap, file `/sdcard/post-cut.mp4`. **Confirmed not present on the device when the pull was attempted** — the recording is lost (likely overwritten by the framework's failure-capture hook during a subsequent test run, or auto-reclaimed by Android storage management; causes are indistinguishable from host-side evidence).
+- **Conclusion:** The text-injection or send-tap preconditions were not met in this run either. Zero AI sends occurred.
+
+### Most likely root cause (Run 2)
+
+Either (a) the `adb shell input text` command dispatched into the wrong focus target because the keyboard-open precondition was not actually met before the text injection, or (b) the text was injected but the send-tap coordinate landed off the actual send control because the keyboard-open precondition was not re-verified between text injection and send-tap. **Verification would require running this again with explicit pre-cut dumps** — out of scope today per the R8 constraint and the explicit instruction not to perform a third reconnaissance.
+
+### What was changed (post-reconnaissance, plumbing only)
+
+- **`src/utils/adb.ts`** — `+31` lines. Added `setWifiEnabled(enabled: boolean): void`. Uses the same `adbCommand(...)` + `execSync(...)` string-joined pattern as `removeDeviceFile`, `pullFile`, `captureLogcat`. Resolves the device target via the existing `deviceArgs()` helper. JSDoc documents (1) the live A13 capability evidence from the reconnaissance, (2) what it does NOT touch (cellular, airplane mode), (3) the pairing requirement (`setWifiEnabled(false)` MUST be paired with `setWifiEnabled(true)` in a `finally` to avoid leaving a cut radio for the next test).
+- **`tests/specs/chat/network-drop.spec.ts`** — new file. Describe `Network drop — P1 (plumbing only, contract pending)`; `it('CHAT-E2E-008 @p1: plumbing — wifi-restore helper works on A13, app stays in clean/default state', ...)`. DEVICE_UDID self-skip. `authFlow.ensureLoggedIn()` + `homeScreen.waitUntilDisplayed()`. `try { homeScreen.chatInputField.click(); } finally { setWifiEnabled(true); settingsScreen.tapHamburgerMenuTrigger(); drawerScreen.newChatButton.click(); }` outside `finally`: `expect(homeScreen.chatPromptHeading).toBeDisplayed()`. Does NOT type a message, send, cut Wi-Fi, define `networkErrorSurface`, or assert any network-failure UI behavior. JSDoc explicitly states the spec does NOT provide coverage of the CHAT-TC-008 contract; includes an R8 GATE note about the future real body.
+- **`test-cases/chat/CHAT-TC-008.md`** — Status section updated (single-paragraph replacement) to reflect the partial plumbing implementation. Preconditions, Steps, Expected Result, and the entire reconnaissance-findings Notes section preserved verbatim. The three-verified-precondition list for future runs (1) `mInputShown=true`, (2) `EditText.text="[PUKU-QA-TEST:CHAT-TC-008] Say hello in one word."`, (3) user bubble already visible in the semantics tree before the cut is recorded for the future session's implementer.
+
+### Evidence / Validation
+
+- `npm run typecheck` → **PASS** (exit 0, no output, no diagnostics). Covers both `src/utils/adb.ts` (new `setWifiEnabled` export) and `tests/specs/chat/network-drop.spec.ts` (imports + `try/finally` body).
+- `npm run lint` → **PASS** (exit 0, no output, no warnings). Default `@typescript-eslint/parser` + `@typescript-eslint/eslint-plugin` config — no rule violations in the new helper or the new spec.
+- **Did NOT run `network-drop.spec.ts` against the A13 tonight.** Today's R8 reconnaissance is explicitly complete and we are avoiding any further AI send. The spec is plumbing-only by design and will be validated on the A13 in a separate session.
+- **Did NOT commit or push.** `git status --short` shows `M src/utils/adb.ts`, `M test-cases/chat/CHAT-TC-008.md`, `?? tests/specs/chat/network-drop.spec.ts`, plus the two pre-existing untracked dirs (`.puku-cli/`, `evidence/`) that are not part of this commit. Commit decision pending review.
+- Reconnaissance artifacts preserved at `evidence/008-recon-2026-08-27/` (`cut-now.xml`, `cut-8s.xml`, `cut-20s.xml`, `responsiveness.xml`).
+
+### Notes / limitation
+
+- **R8 budget is intact, and that's the most important outcome.** Zero AI sends across both reconnaissance runs + zero AI sends in the plumbing-only spec leaves the shared test account's inference-cost exposure unchanged from where it was before today. The CHAT-TC-008 priority question (P1 vs P0) remains open per the test design matrix and per `CHAT-TC-008.md`'s own "priority pending evidence" framing. **The actual network-failure UI is still unobserved.**
+- **Why the Option-B plumbing spec is honest despite its narrow scope.** The `it` title does NOT contain "graceful error" or "no crash." The JSDoc title literally says "PLUMBING ONLY — does NOT provide coverage of the actual CHAT-TC-008 contract." Five negative-capability bullets enumerate what the spec does NOT do. The Status doc mirrors the same framing. Future maintainers running `npm test` and seeing 19 green specs may mis-read green-build as CHAT-TC-008 coverage; this risk is documentation-only (no tool-level enforcement) and is consistent with the project's existing convention where every `tests/specs/chat/*.spec.ts` confirms a structural/behavioral signal rather than exhaustive contract coverage.
+- **Future-run preconditions checklist** (recorded here for the next session's implementer):
+ 1. After the chat-input focus tap, `dumpsys input_method | findstr mInputShown` returns `true`.
+ 2. A fresh `uiautomator dump` after `input text` injection shows a `<node class="android.widget.EditText">` with `text="[PUKU-QA-TEST:CHAT-TC-008] Say hello in one word."` (NOT `text=""`).
+ 3. A fresh `uiautomator dump` shows `<node text="[PUKU-QA-TEST:CHAT-TC-008] Say hello in one word.">` — i.e., the user bubble has rendered in the semantics tree before the cut.
+ If any of the three is not met, the cut is on an empty/idle app and the observation is meaningless.
+- **`driver.execute('mobile: shell', ...)` was deliberately NOT used.** It is unreferenced anywhere in `src/` or `tests/` (Grep returns zero matches), not wired in `wdio.conf` / `wdio.android.conf` capabilities, and would require a separate live capability probe to validate. The existing project convention for any `adb shell <cmd>` is `execFileSync('adb', [...deviceArgs(), 'shell', ...])` (or the equivalent string-joined `execSync(...)` used by `adbCommand()`), and `setWifiEnabled` follows that exact pattern.
+- **Sandbox-policy blockers encountered during reconnaissance.** Three forms of `adb shell uiautomator dump ...` were denied by the bash sandbox (unquoted, quoted, single-arg chained). Two forms of `adb pull ...` were denied (one relative, one absolute). The session explicitly handed off the UI-dump and recording-pull steps to manual host-side execution in response, per the user's "you run the dumps" decision. No alternative sandbox-friendly mechanism was used; the change-of-handoff is the documented workaround.
 ---
