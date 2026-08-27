@@ -639,3 +639,42 @@ A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.m
 - **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
 - **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
 ---
+
+## 2026-08-26 (QA2 — LOGIN-E2E-010)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-010` (P1) — "App remains on login screen (no crash) after the broken email-auth toast" — on a dedicated branch `feat/login-e2e-010` from current master, the next Reliability-tier item from the test-design-epic-auth-login coverage matrix. **Verified passing on the physical Samsung Galaxy A13 (`R58T90F5ALY`).**
+
+### What was done
+
+- **Branch:** `feat/login-e2e-010` created off `master`.
+- **Stub lifted** (`tests/specs/auth/login-screen.spec.ts`): replaced the `it.skip('LOGIN-E2E-010 ...')` placeholder with an active `it(...)`. Reuses only the live-verified `loginScreen` surface — `waitUntilDisplayed()`, `tapEnterYourEmail()`, `emailNotConnectedSnackBar` (verified 2026-08-24 on A13), and `titleElement` (verified 2026-08-04). **No new screen-object methods, no new utilities, no shared-infrastructure changes, no refactor.**
+- **"No crash" operationalization** — three invariants, each checked independently:
+  1. `emailNotConnectedSnackBar` is displayed — proves the broken email-auth failure path actually fired (without this, the test would pass trivially and lie about reliability).
+  2. `loginScreen.titleElement` (`~Puku Editor`) is displayed — Flutter engine is alive, the login screen is still rendered.
+  3. `driver.getCurrentPackage() === 'sh.puku.app'` — focus did not leak to Chrome or a system error dialog.
+- **Out of scope by construction** (test design's NFR-Reliability wording is "no crash", not "no hang"):
+  - No ANR / hang detection.
+  - No logcat / PII assertion — that is LOGIN-E2E-009's scope (NFR-Security).
+- **Manual test case:** Created `test-cases/auth/LOGIN-TC-010.md` matching `LOGIN-TC-008.md`'s structure (P1, NFR-Reliability link, Preconditions/Steps/Expected Result/"No crash" operational definition table/Clean default-state/Status=Pass/Notes). Explicitly distinguishes LOGIN-E2E-009 (Security), LOGIN-E2E-011 (network-loss), and LOGIN-E2E-012/013 from this scenario's scope.
+- **No CI/CD changes.** LOGIN-E2E-010 is emulator-safe (logged-out, no OAuth round-trip, no `APP_NO_RESET`), but Stage 1 CI (`ci.yml`) is intentionally locked to `LOGIN-E2E-002` today and a broader grep change is a separate decision — flagged as a follow-up, not made unilaterally.
+- **No staged `.puku-cli/` artifacts.**
+
+### Evidence / Validation
+
+- `npm run typecheck` → **PASS** (authoritative, no output, exit 0).
+- `npm run lint` → **PASS** (authoritative, no output, exit 0).
+- Physical-device test execution on the Samsung Galaxy A13 (`R58T90F5ALY`):
+  - Command: `DEVICE_UDID=R58T90F5ALY npm test -- --mochaOpts.grep="LOGIN-E2E-010"`.
+  - Result: **PASS** — `1 passing (4.1s)`; Spec Files: 1 passed, 18 skipped, 19 total (100% completed) in 00:01:57.
+  - Confirmed: only the targeted scenario ran; all three "no crash" invariants held on the live device; no OAuth round-trip occurred; no AI message was sent.
+  - App left in clean/default logged-out login screen state (no follow-on teardown needed — same default every other login-screen scenario starts from).
+- A13 intentionally remains logged out; `AUTH-E2E-016` can re-establish login state for subsequent work.
+- `git status` clean apart from intended diff (`tests/specs/auth/login-screen.spec.ts`, new `test-cases/auth/LOGIN-TC-010.md`) and the untracked `.puku-cli/` reconnaissance artifacts.
+
+### Notes / limitation
+
+- **Companion to LOGIN-E2E-008.** That scenario proves the SnackBar appears (R1 regression guard); this scenario proves the app stays alive after it does. They run independently and both are needed for the Reliability Quality Gate (≥95% P1 pass rate, 100% NFR-Reliability coverage per the test design's Quality Gate Criteria).
+- **LOGIN-E2E-009 / 011 remain `it.skip(...)` placeholders.** 009 (Security, PII in toast) needs a logcat-grep helper that does not yet exist; 011 (network-loss mid-OAuth) needs A13-side verification of which `adb shell` network-toggle path is permitted on the userdebug build (the QA owner cannot confirm that tonight, A13 is userdebug only).
+- **CI grep update is a follow-up, not part of this change.** Extending `ci.yml`'s `--mochaOpts.grep="LOGIN-E2E-002"` to include `LOGIN-E2E-010` is a separate Stage 1 widening that touches the vanilla-emulator pipeline — kept out of this commit so the LOGIN-E2E-010 PR stays single-purpose.

@@ -68,6 +68,7 @@ describe('Login screen — P0/P1', () => {
     expectUnexpected(report.unexpected, 'Login', 'LOGIN-E2E-006');
   });
 
+
   /**
    * LOGIN-E2E-007 @p1 (R2 lane): tapping "Continue with Google" redirects the
    * app off to the external Chrome OAuth consent screen — and stops there.
@@ -133,9 +134,54 @@ describe('Login screen — P0/P1', () => {
     await expect(loginScreen.emailNotConnectedSnackBar).toBeDisplayed();
   });
 
-  it.skip('LOGIN-E2E-009 @p1: broken email-auth error toast contains no sensitive data', async () => {});
+  /**
+   * LOGIN-E2E-010 @p1: NFR-Reliability — the app remains on the login screen
+   * (no crash) after the broken email-auth SnackBar fires.
+   *
+   * P1 (test-design-epic-auth-login.md coverage matrix; Quality Gate
+   * Reliability 100%). Mirrors LOGIN-E2E-008's precondition (logged-out
+   * login screen; R1 in the test design means "Enter your email" still
+   * surfaces the "not connected" SnackBar today) and reuses its
+   * live-verified locator (`loginScreen.emailNotConnectedSnackBar` —
+   * confirmed on the Samsung Galaxy A13 (R58T90F5ALY) 2026-08-24, content-
+   * desc="Email sign-in flow is not connected yet", class android.view.View).
+   *
+   * "No crash" is operationalized as:
+   *   1. the broken email-auth SnackBar appears — proves the intended
+   *      failure path actually executed (a test that never reaches the
+   *      SnackBar would pass trivially and lie about reliability);
+   *   2. loginScreen.titleElement (`~Puku Editor`) remains displayed —
+   *      the login screen is still rendered, the Flutter engine is alive;
+   *   3. driver.getCurrentPackage() === 'sh.puku.app' — focus did not
+   *      leak to Chrome or a system error dialog.
+   *
+   * Out of scope (deliberately):
+   *   - ANR / hang detection — the test design's NFR-Reliability wording
+   *     is "no crash", not "no hang"; a separate, deeper probe would be
+   *     needed for hang detection and is not added here.
+   *   - Logcat / PII assertion — that is LOGIN-E2E-009's scope (NFR-
+   *     Security); not duplicated here.
+   *
+   * No sleep, no retry: `expect(...).toBeDisplayed()` already polls the
+   * semantics tree on the locator's default cadence, and `getCurrentPackage`
+   * is a synchronous driver call. Project convention matches the rest of
+   * `login-screen.spec.ts`.
+   */
+  it('LOGIN-E2E-010 @p1: app remains on login screen (no crash) after the broken email-auth toast', async () => {
+    await loginScreen.waitUntilDisplayed();
+    await loginScreen.tapEnterYourEmail();
 
-  it.skip('LOGIN-E2E-010 @p1: app remains on login screen (no crash) after the broken email-auth toast', async () => {});
+    // (1) The intended failure path actually fired — the SnackBar appeared.
+    await expect(loginScreen.emailNotConnectedSnackBar).toBeDisplayed();
+
+    // (2) The login screen is still rendered (Flutter engine is alive).
+    await expect(loginScreen.titleElement).toBeDisplayed();
+
+    // (3) Focus has not leaked to Chrome / a system error dialog.
+    expect(await driver.getCurrentPackage()).toBe('sh.puku.app');
+  });
+
+  it.skip('LOGIN-E2E-009 @p1: broken email-auth error toast contains no sensitive data', async () => {});
 
   it.skip('LOGIN-E2E-011 @p1: graceful error on network loss mid-Google-OAuth-redirect', async () => {});
 });
