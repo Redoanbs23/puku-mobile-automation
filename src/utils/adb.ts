@@ -60,7 +60,7 @@ function listConnectedDeviceSerials(): string[] {
     .map(([serial]) => serial);
 }
 
-function adbCommand(...args: string[]): string {
+export function adbCommand(...args: string[]): string {
   return ['adb', ...deviceArgs(), ...args].join(' ');
 }
 
