@@ -638,4 +638,53 @@ A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.m
 - **`expectUnexpected` was hoisted from `tests/specs/chat/locator-health.spec.ts` rather than moved to a new shared utility file**, because the helper is small, tightly bound to the locator-health domain, and only has two callers. A third caller would justify hoisting.
 - **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
 - **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
+
 ---
+
+## 2026-08-27 (QA2 — CHAT-E2E-019)
+
+### Session Summary
+
+Implemented `CHAT-E2E-019` (P0) — "Send a message, background the app, resume, confirm the conversation is still present" (R15) — on the current branch, from current master. End-to-end on the physical Samsung Galaxy A13 (`R58T90F5ALY`): **PASS** with the established clean-default-state teardown (`1 passing (40.2s)`; Spec Files: `1 passed, 19 skipped, 20 total (100% completed) in 00:02:35`). `npm run typecheck` PASS, `npm run lint` PASS, `git diff --check` PASS.
+
+### Chronological Log
+
+1. **Read-only reconnaissance** — read `test-cases/chat/CHAT-TC-019.md`, the `CHAT-E2E-019` row of `_bmad-output/test-artifacts/test-design-epic-chat-core.md`, the existing pattern in `tests/specs/chat/send-message.spec.ts` (the closest precedent — same DEVICE_UDID self-skip, same `authFlow.ensureLoggedIn()` flow, same `responseBubbleExcluding` structural contract), `src/screens/home.screen.ts` (verified only existing methods/locators would be used: `chatPromptHeading`, `chatInputField`, `responseBubbleExcluding`, `typeChatMessage`, `tapSendButton`, `waitUntilDisplayed`), `src/flows/auth.flow.ts`, and `src/utils/real-text-input.ts`.
+
+2. **Initial blocker: HTTP 429 from the PUKU inference endpoint** — multiple recon probes against the A13 returned `DioException [bad response]: ... status code of 429 ...` (exposed as `content-desc=""` on `View@text=""`, self-dismissing within ~3 s). The 20 s wait for the AI response repeatedly timed out with no `View@text` other than the user bubble appearing. Per the test case's own note ("Do not repeat the send while experimenting with backgrounding technique"), the test was **not** weakened, no `try/catch` around the 429 was added, and no skip-on-429 was introduced — the natural-failure point was the response-bubble wait, exactly as the design prescribed.
+
+3. **Subscription activation unblocked the AI backend** — once the editor account had a standing PUKU subscription, the AI backend responded normally and the structural response bubble appeared within the wait window.
+
+4. **First implementation run on A13 (`R58T90F5ALY`) — `1 failing`** — the response-bubble wait now passed (captured response text `"4"`, the correct answer to `"What is 2 + 2?"`), `appiumBackground(null)` + `activateApp('sh.puku.app')` + `getCurrentPackage() === 'sh.puku.app'` all succeeded, and the post-resume identity assertion on the response text **would have passed** — but the test stopped one step earlier, at `homeScreen.waitUntilDisplayed()` (which resolves to `chatPromptHeading`, the **empty/new-chat state chrome**), because once an active conversation is present, that heading is correctly absent. This was a misframed assertion, not a product failure: the test case's own expected outcome says "the app has not reset to an empty chat state," so asserting the empty-state chrome is a direct contradiction with what the case is meant to prove.
+
+5. **Revised the post-resume assertions to match the persistence contract from CHAT-TC-019**:
+   - Removed the inappropriate `homeScreen.waitUntilDisplayed()`.
+   - Replaced it with `homeScreen.chatInputFieldWithText.waitForDisplayed({ timeout: 10000 })` — the chat composer card is back (single `EditText` on the chat surface, class-matched — documented in `home.screen.ts` as unambiguous). Proves we are on the chat surface without asserting the empty-state chrome.
+   - Added an assertion that the sent user bubble `//android.view.View[@text="${TEST_MESSAGE}"]` is still in the semantics tree (same `text`-attribute XPath pattern the Screen Object already trusts via `responseBubbleExcluding` — **no new locator introduced**).
+   - Strengthened the AI response persistence check: `expect(responseLocator).toBeDisplayed(...)` (structural existence) **and** `expect(postResumeResponseText).toBe(preResumeResponseText)` (literal-content identity). The latter is the strongest persistence signal: it proves the same response content survived the background/resume boundary, not just that some response-shaped View happens to exist.
+
+6. **Second run on A13 (`R58T90F5ALY`) — `1 passing` (pre-teardown)** — `device: 79998818-1156-44ed-8551-a1d3595c78df`, `1 passing (37.7s)`. Decisive evidence from the wdio INFO log: `getElementText(00000000-0000-02dc-0000-003400000003) → RESULT 4` pre-background, then the same `getElementText` call on the same element id returned `RESULT 4` post-background — the literal response text `"4"` survived byte-for-byte.
+
+7. **Added the established clean-default-state teardown** — `settingsScreen.tapHamburgerMenuTrigger(); drawerScreen.newChatButton.click(); expect(homeScreen.chatPromptHeading).toBeDisplayed();`, mirroring `tests/specs/chat/long-message.spec.ts` / `rotation.spec.ts`. Added the two new imports (`settingsScreen`, `drawerScreen`). The drawer reset is used rather than `clear()`/`setValue()` for the same reason those two specs document it (WebdriverIO's clear/setValue are unreliable against this app's custom-rendered EditText — see `ai-log/lessons-learned.md`).
+
+8. **Third run on A13 (`R58T90F5ALY`) — `1 passing` (with teardown)** — `device: 3a8f1494-e715-4ecd-9148-647a1a325041`, `1 passing (40.2s)`. wdio INFO log confirms the teardown executed cleanly: `performActions` (hamburger tap) → `findElement("accessibility id", "New chat")` resolved → `elementClick` returned `null` → `findElement("accessibility id", "How can i help you today!")` returned `isElementDisplayed → true`. App left on the empty/default home screen for whatever runs next.
+
+9. **Static checks** — `npm run typecheck` PASS (exit 0, no diagnostics); `npm run lint` PASS (exit 0, no diagnostics); `git diff --check` PASS (exit 0, no whitespace/line-ending warnings).
+
+10. **Companion artifacts** — updated `test-cases/chat/CHAT-TC-019.md`: `Linked automated test` now points at `tests/specs/chat/conversation-background-resume.spec.ts`; `Status` → `Pass (automated, 2026-08-27) — physical Samsung Galaxy A13 (R58T90F5ALY).`; Notes lead rewritten from "Designed, not yet automated" to "Automated and physically validated, 2026-08-27"; a new "Automation evidence" sub-section in Notes records the subscription unblock, the response text, the background/resume cycle, the post-resume assertions, the established teardown, and the rationale for replacing the original `chatPromptHeading` check. **No rewriting of the test case's intended Preconditions / Steps / Expected Result / R8 / scope-boundary notes** — those behavioral requirements are preserved verbatim.
+
+### Key Decisions
+
+- **Test does NOT special-case or swallow the HTTP 429.** During the rate-limited window, the test failed naturally at the response-bubble wait and that failure was captured as evidence of the backend condition, per the test case's note. No 429-specific skip, no `try/catch`, no softened assertion.
+- **Removed `chatPromptHeading` from the post-resume assertions rather than weakening the test.** Asserting the empty-state chrome once an active conversation is present contradicts the test case's own expected outcome. Replaced with the persistence-shaped assertions described in step 5.
+- **Strongest assertion is the literal-content identity check** (`postResumeResponseText === preResumeResponseText`), not "some response-shaped View exists." Captured the actual response text pre-background and required byte-for-byte equality post-background.
+- **No new locators introduced.** The user-bubble XPath reuses the same `text`-attribute pattern the Screen Object already trusts via `responseBubbleExcluding`; the post-resume "back on chat surface" check reuses the existing `chatInputFieldWithText` (class-only) locator.
+- **Documentation updates kept surgical** — only the automation/status/evidence portions of `CHAT-TC-019.md` were touched. Preconditions, Steps, Expected Result, R8 note, and scope-boundary note are unchanged.
+
+### Notes / limitation
+
+- **R8 — one-message-send execution.** This test sends exactly one real AI message per run. Per `R8`'s single-execution gate, no burn-in/retry-loop schedule is permitted for `CHAT-E2E-019`.
+- **Subscription-dependent.** The earlier `HTTP 429` window demonstrated that this scenario cannot run to completion against an unsubscribed PUKU account — the test must capture that failure (rather than skip past it) per `R8`'s no-swallowing posture, so any CI environment that wants a green run needs a subscribed account.
+- **`driver.background()` deprecation notice.** WebdriverIO emitted a deprecation notice at runtime pointing at the `driver.background()` mobile-command form as the future replacement for `driver.appiumBackground(null)`. The mobile-command form is not typed in this wdio version, so the existing `appiumBackground(null)` call was retained (and executed successfully — `RESULT true` in the run log). Flagged for follow-on work, not changed.
+- **Clean-default-state teardown in place.** The spec ends with `settingsScreen.tapHamburgerMenuTrigger() → drawerScreen.newChatButton.click() → expect(homeScreen.chatPromptHeading).toBeDisplayed()`, matching the established convention in `tests/specs/chat/long-message.spec.ts` and `rotation.spec.ts`. Verified live on the A13 (third run, with teardown): `findElement("accessibility id", "New chat")` resolved → `elementClick` succeeded → `findElement("accessibility id", "How can i help you today!")` was displayed. App left on the empty/default home screen.
+- **Scope boundary preserved.** Per CHAT-TC-019's own scope-boundary note: this scenario tests backgrounding/resume only. A full process-kill (force-stop) or device-reboot variant is a separate concern and is **not** exercised by this test.
