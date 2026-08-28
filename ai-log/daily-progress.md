@@ -639,3 +639,74 @@ A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.m
 - **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
 - **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
 ---
+
+## 2026-08-28 (QA2 — LOGIN-E2E-011)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-011` (P1) — "Graceful error on network loss mid-Google-OAuth-redirect → no crash" (R2 + NFR-Reliability) — on branch `feat/login-e2e-011` from current master, following two recon passes (one pure read-only, one with controlled device probes) that resolved both empirical uncertainties from the prior audit. **Verified passing on the physical Samsung Galaxy A13 (`R58T90F5ALY`).**
+
+### Chronological Log
+
+1. **Re-read master files before any write** — confirmed branch `feat/login-e2e-011` is fresh from master at `b1fa604` (no diff vs. `origin/master`); confirmed the existing LOGIN-E2E-011 stub, the existing `src/utils/adb.ts`, the established `LOGIN-E2E-007` redirect-detection pattern, and the established LOGIN-TC-007 / LOGIN-TC-009 test-case format.
+
+2. **First recon pass (read-only)** — flagged that the user's framing of the scenario as "R8-bearing OAuth happy path" conflicted with the authoritative scope (`_bmad-output/test-artifacts/test-design-epic-auth-login.md` line 140: "Network dropped mid-Google-OAuth-redirect → graceful error, not a crash"; R2 + NFR-Reliability). The user corrected the scope and proceeded with the network-loss interpretation — the right call: R8 has nothing to do with this scenario (R8 is the chat-core, OPS/BUS, message-send-cost risk).
+
+3. **Second recon pass (controlled device probes):**
+   - **Probe A (network control):** verified on R58T90F5ALY (user build) that `adb shell svc wifi disable` reliably takes the device offline (`Active default network: none`) and `svc wifi enable` reliably restores it; `settings get global` confirmed `airplane_mode_on=0`, `wifi_on=1`, `mobile_data=1` after restore. `svc data disable` was empirically a no-op (no SIM, no SubscriptionId), so it is not part of the scenario's surface.
+   - **Probe B (OAuth handoff):** tapped "Continue with Google" at the established bounds (`[45,1139][1035,1296]` from the prior LOGIN-E2E-009 recon) and polled `topResumedActivity`. `com.android.chrome/com.google.android.apps.chrome.IntentDispatcher` at t+1s → `com.android.chrome/org.chromium.chrome.browser.customtabs.CustomTabActivity` at t+2s and stable thereafter. `KEYCODE_BACK` cleanly returned to PUKU's `MainActivity` (same instance, no process restart). The handoff is viable on this device without any pre-authenticated Google account.
+
+4. **Implementation:**
+   - **`src/utils/adb.ts`** — added two narrowly-scoped helpers: `disableWifi()` and `enableWifi()`, both wrapping `execSync(adbCommand('shell', 'svc', 'wifi', 'disable' | 'enable'))`. Doc comment explains the empirical justification (the user-build `svc data` no-op, the no-SIM reality of R58T90F5ALY) and why these are deliberately named at the Wi-Fi level rather than as a generic `disableNetwork()` abstraction. No other utilities touched.
+   - **`tests/specs/auth/login-screen.spec.ts`** — replaced the `it.skip('LOGIN-E2E-011 ...')` stub with an active `it(...)`. Body: DEVICE_UDID self-skip → `loginScreen.waitUntilDisplayed()` baseline → `loginScreen.tapContinueWithGoogle()` → `driver.waitUntil(... getCurrentPackage() === 'com.android.chrome', { timeout: 15000 })` to confirm the redirect is underway (reuses LOGIN-E2E-007's pattern, deliberately does NOT wait for the consent page) → `disableWifi()` → settle (`driver.pause(1500)`) → `driver.back()` if Chrome still foreground → polled `loginScreen.titleElement.isDisplayed()` (10s window, with try/catch to handle the foreground transition) → `loginScreen.waitUntilDisplayed()` clean default → unconditional `finally` block restoring Wi-Fi + best-effort PUKU foreground.
+   - JSDoc on the test explains the R2 / NFR-Reliability contract, the empirical baseline from the recon (which Chrome activity class is reached, when), what is deliberately NOT asserted (Chrome's offline UI), and why the test is R8-free.
+   - **No evidence-writing code in the test body** — the user (tomal-g) asked to keep the spec file focused on the test logic only; evidence is captured externally (`evidence/login011-run.txt` from the `npm test` redirection below).
+
+5. **Static validation** — `npm run typecheck` (PASS, exit 0) and `npm run lint` (PASS, exit 0). Both clean on the post-edit tree.
+
+6. **Physical-device validation** — `DEVICE_UDID=R58T90F5ALY PUKU_APK_PATH=...app-prod-release.apk npm test -- --mochaOpts.grep="LOGIN-E2E-011" 2>&1 | tee evidence/login011-run.txt` against the live A13:
+   - `✓ LOGIN-E2E-011 @p1: graceful error on network loss mid-Google-OAuth-redirect`
+   - `1 passing (7.9s)`
+   - `Spec Files: 1 passed, 18 skipped, 19 total (100% completed) in 00:02:08`
+   - exit 0
+   - Webdriver-level command trace (in the captured evidence) confirms: `findElement("accessibility id", "Continue with Google")` → `elementClick` → `mobile: getCurrentPackage` returned `com.android.chrome` → after the test's `disableWifi()` + settle + back, `mobile: getCurrentPackage` returned `sh.puku.app`, and `isElementDisplayed("Puku Editor")` returned `true`.
+
+7. **Post-run device state (verified by adb probes after the test session ended):**
+   - `settings get global airplane_mode_on=0`, `wifi_on=1`, `mobile_data=1` — baseline.
+   - `Active default network: 154` (Wi-Fi, validated, on the test AP) — fully restored.
+   - `topResumedActivity` was initially the Android Launcher (the Appium session's `deleteSession()` returns focus to home); the device was then re-foregrounded on `sh.puku.app/.MainActivity` via `adb shell monkey -p sh.puku.app -c android.intent.category.LAUNCHER 1` to satisfy the project's "PUKU foreground, logged-out login screen" post-run invariant. Final `mCurrentFocus = sh.puku.app/sh.puku.app.MainActivity`.
+
+8. **Manual test case authored** — `test-cases/auth/LOGIN-TC-011.md`, mirroring the LOGIN-TC-007 / LOGIN-TC-009 format: Priority P1, R2 + NFR-Reliability link, Preconditions (including the device-required DEVICE_UDID, the no-pre-auth-account note, the empirical recon baseline), Steps, Expected Result, Actual Result (with the A13 specifics), Status **Pass**, Notes (R8-free, Wi-Fi-only surface, companion to LOGIN-E2E-007, what is asserted vs. not asserted, evidence references).
+
+### Files Changed
+
+- `src/utils/adb.ts` (added `disableWifi()` / `enableWifi()` helpers + JSDoc)
+- `tests/specs/auth/login-screen.spec.ts` (replaced `it.skip(...)` stub with the real `it(...)`)
+- `test-cases/auth/LOGIN-TC-011.md`
+- `ai-log/daily-progress.md`
+
+### Findings / Decisions
+
+- **`svc wifi disable` IS the network-control surface on this device.** Empirical recon cleared the user-build caveat flagged in the original READMEs / prior session pre-implementation thinking — Wi-Fi toggle alone is sufficient because there is no SIM and the user build's `svc` shim still wires Wi-Fi.
+- **`svc data disable` is a deliberate non-target on this firmware.** Naming the helpers `disableWifi` / `enableWifi` (not `disableNetwork` / `enableNetwork`) keeps the test code honest about what actually happens at the call site. Future device with a SIM will need its own recon before reuse — the helpers, not a generic abstraction, leave that decision open.
+- **The test does not wait for the consent page.** LOGIN-E2E-007 uses `oauthConsentScreen.waitUntilDisplayed()` after the redirect; this scenario deliberately stops at `getCurrentPackage() === 'com.android.chrome'`. That is the LOGIN-E2E-011-vs-AUTH-E2E-015-vs-LOGIN-E2E-007 distinction in one line.
+- **Empirical Chrome behavior during the offline window.** Chrome Custom Tab stayed foreground through the 1.5s settle; back key cleanly returned to PUKU. The 7.9s test runtime reflects that Chrome never auto-dismissed during this run, which is fine — both "Chrome auto-dismisses" and "Chrome stays until back" are valid graceful outcomes and the test accepts either (Chrome's offline UI is not PUKU's contract; not asserted).
+- **Unconditional Wi-Fi restore in `finally`.** The scenario MUST NEVER leave the device offline, even on assertion failure — the `try/finally` plus the inner `try { enableWifi() } catch {}` plus an inner-best-effort foreground-restore implements that contract. If the assertion failure is the primary signal, the restore failures are swallowed so they don't mask the assertion.
+
+### Notes / limitation
+
+- **No Chrome offline-UI assertion is included by design.** Chrome's presentation (offline dino, error page, blank, auto-dismiss, etc.) is outside PUKU's reliability contract. Asserting against it would couple the test to Chrome's release cycle, not to PUKU's code.
+- **No hang / ANR detection.** The design doc's NFR-Reliability wording is "no crash", not "no hang". ANR detection is a separate, deeper probe intentionally out of scope here (consistent with `LOGIN-TC-010`'s "no crash" operationalization).
+- **No pre-authenticated account precondition.** The earlier `editorpuku@gmail.com` is intentionally absent from this device; the scenario is verified to work without it because the redirect-to-Chrome handoff does not depend on which Google account (if any) is signed in. The current BS23 Microsoft account configuration is sufficient.
+- **What is asserted:** `getCurrentPackage() === 'com.android.chrome'` (redirect underway) → `disableWifi()` (input) → after a settle + back, `loginScreen.titleElement.isDisplayed()` (PUKU's login screen renders — Flutter semantics node, only present when login screen has rendered). Together: PUKU's process survived the network drop mid-redirect, PUKU's own UI is reachable.
+
+### Evidence / Validation
+
+- `npm run typecheck` → **PASS** (authoritative, no output, exit 0).
+- `npm run lint` → **PASS** (authoritative, no output, exit 0).
+- Physical-device test execution on the Samsung Galaxy A13 (`R58T90F5ALY`):
+  - Command: `DEVICE_UDID=R58T90F5ALY PUKU_APK_PATH=...app-prod-release.apk npm test -- --mochaOpts.grep="LOGIN-E2E-011" 2>&1 | tee evidence/login011-run.txt`
+  - Result: **PASS** — `1 passing (7.9s)`; Spec Files: 1 passed, 18 skipped, 19 total (100% completed) in 00:02:08.
+  - Confirmed: only the targeted scenario ran; the redirect handoff reached `com.android.chrome`; Wi-Fi was disabled mid-redirect and restored in the unconditional `finally`; PUKU's `~Puku Editor` title content-desc was `isElementDisplayed: true` after returning from Chrome; PUKU's foreground package is `sh.puku.app`.
+- No emulator validation was performed — the scenario requires a physical device (Chrome Custom Tab activity class is part of the verified path; `adb shell svc wifi disable` was verified on this specific device's user build).
+- A13 intentionally remains logged out; the LOGIN-TC-011 / LOGIN-E2E-011 scenario leaves the device on the logged-out login screen as the clean default precondition.

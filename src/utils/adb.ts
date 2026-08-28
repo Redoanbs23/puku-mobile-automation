@@ -83,3 +83,29 @@ export function pullFile(devicePath: string, localPath: string): void {
 export function removeDeviceFile(devicePath: string): void {
   execSync(adbCommand('shell', 'rm', '-f', devicePath));
 }
+
+/**
+ * Toggle the device's Wi-Fi radio off and on.
+ *
+ * Scoped to Wi-Fi on purpose: mobile-data control was empirically a no-op
+ * on the R58T90F5ALY firmware (Android 14, user build) — `svc data disable`
+ * returns exit 0 but does not change the `mobile_data` setting, and on this
+ * device there is no SIM (dumpsys shows `SubscriptionId: -1`) so mobile data
+ * is not in use anyway. Wi-Fi disable alone is sufficient to take the
+ * device offline on this hardware, as confirmed during the LOGIN-E2E-011
+ * recon on 2026-08-28. A generic `disableNetwork()` abstraction would
+ * silently imply mobile-data toggle works when it doesn't — these two
+ * narrowly-scoped helpers avoid that footgun and document what actually
+ * happens at the call site.
+ *
+ * Used by LOGIN-E2E-011 (network dropped mid-Google-OAuth-redirect → no
+ * crash) and may be reused by future reliability scenarios (e.g. the
+ * chat-core analogue CHAT-E2E-008, network loss mid-send).
+ */
+export function disableWifi(): void {
+  execSync(adbCommand('shell', 'svc', 'wifi', 'disable'));
+}
+
+export function enableWifi(): void {
+  execSync(adbCommand('shell', 'svc', 'wifi', 'enable'));
+}
