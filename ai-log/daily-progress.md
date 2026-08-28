@@ -638,4 +638,81 @@ A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.m
 - **`expectUnexpected` was hoisted from `tests/specs/chat/locator-health.spec.ts` rather than moved to a new shared utility file**, because the helper is small, tightly bound to the locator-health domain, and only has two callers. A third caller would justify hoisting.
 - **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
 - **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
+
 ---
+
+## 2026-08-28 (QA2 — LOGIN-E2E-009)
+
+### Session Summary
+
+Implemented and physically validated `LOGIN-E2E-009` (P1, NFR-Security) — "Broken email-auth error toast contains no sensitive data" — on a dedicated branch `feat/login-e2e-009` from `origin/master`. Verified passing on the physical Samsung Galaxy A13 (`R58T90F5ALY`). Removes one of the four remaining CI-relevant unimplemented stubs (LOGIN-E2E-009/011/012/014).
+
+### Live recon findings (physical A13, R58T90F5ALY, 2026-08-28)
+
+- `adb -s R58T90F5ALY shell uiautomator dump` + `adb pull` are blocked by the sandbox; UI dumps were captured locally and placed in `evidence/login009-pre.xml` (pre-tap) and `evidence/login009-post.xml` (post-tap), per the established CHAT-TC-014 pattern.
+- **Pre-tap (login screen rendered):** "Enter your email" is `android.widget.Button` at `bounds="[45,1454][1035,1611]"` — center `(540, 1532)`, `content-desc="Enter your email"`, matches the existing `loginScreen.enterYourEmailButton` getter.
+- **Post-tap (snackbar visible):** snackbar node is `class="android.view.View"`, `content-desc="Email sign-in flow is not connected yet"`, `bounds="[0,2107][1080,2273]"`, package `sh.puku.app`. **The content-desc is an exact, single-line literal — no interpolation, no embedded identifier.** Matches the existing `loginScreen.emailNotConnectedSnackBar` getter exactly; no new getter required.
+- **Logcat slice (`evidence/login009-logcat.txt`, 200 lines, 14:38:09–14:38:53):** the slice covers the pre-tap idle, the tap (`InputDispatcher: Inject motion` → `GestureDetector: handleMessage TAP` for PUKU PID `24742`, at 14:38:14), the snackbar render window, and 25 s of post-snackbar idle. The entire 200-line slice contains **zero PUKU-process log lines outside touch-routing** — no app-emitted error string, no network body, no token, no identifier. The "REDACTED" entries are `com.google.android.gms` `NetworkScheduler.Stats` format-string templates, not actual secrets. **The broken email-auth path is empirically silent because it is client-side only — there is nothing to leak because nothing crosses a network boundary.**
+
+### Recon summary table
+
+| Recon question | Evidence-backed answer |
+|---|---|
+| Any email addresses / user identifiers? | None. Zero `@` matches in the slice; the snackbar literal is identifier-free. |
+| Any JWT / OAuth / access / refresh tokens? | None. Zero `eyJ`, `ya29.`, `1//`, or `Bearer ` matches. |
+| Any phone numbers / session / request IDs? | None in user-data terms. Kernel IO and PID numbers exist; no phone-shaped strings. |
+| Any other PUKU-specific sensitive patterns? | None. No `Authorization:` headers, no OAuth client IDs, no `AIza…` keys, no Flutter/Dart framework errors. |
+
+### Minimum defensible sensitive-data assertion set
+
+Exactly six patterns, each grounded in the recon above and used both against the snackbar `content-desc` and against the captured logcat slice:
+
+1. **Email address** — `/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/`
+2. **JWT** — `/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/`
+3. **Google OAuth access token** — `/ya29\.[A-Za-z0-9_-]+/`
+4. **Google OAuth refresh token** — `/1\/\/[A-Za-z0-9_-]{20,}/`
+5. **Bearer authentication token** — `/Bearer\s+[A-Za-z0-9._~+/=-]{20,}/`
+6. **Form-style secret** — `/(password|access_token|refresh_token|client_secret)\s*=\s*[^&\s]{4,}/i`
+
+**Deliberately not asserted:** phone numbers (no phone-shaped signals in this code path), IP addresses (legitimate `10.0.2.2` etc. would cause false positives), UUIDs (Android's own internal IDs are valid UUIDs), general session/request IDs (kernel IO counters and PIDs are valid-looking). Adding those would have drifted the test away from its NFR-Security scope.
+
+### What was done
+
+- **Branch:** `feat/login-e2e-009` created off `origin/master` (clean tree first; no changes from `feat/chat-e2e-019`).
+- **Automation:** replaced the `it.skip('LOGIN-E2E-009 ...')` stub at `tests/specs/auth/login-screen.spec.ts:177` with an active `it(...)` that:
+  - self-skips when `DEVICE_UDID` is unset (CI / fresh emulator) — matches the pattern established by `LOGIN-E2E-006` / `LOGIN-E2E-007`;
+  - waits for the logged-out login screen via the existing `loginScreen.waitUntilDisplayed()`;
+  - taps "Enter your email" via the existing `loginScreen.tapEnterYourEmail()`;
+  - asserts the snackbar is displayed via the existing `loginScreen.emailNotConnectedSnackBar` getter;
+  - captures the rendered snackbar's `content-desc` via `getAttribute('content-desc')` and asserts it equals the literal `Email sign-in flow is not connected yet` (not just `isDisplayed` — drift would be a regression);
+  - applies the six sensitive-data patterns to the captured `content-desc` (belt-and-braces against future interpolation regressions);
+  - captures logcat via the existing `captureLogcat(200)` (`src/utils/adb.ts:67`) and applies the same six patterns to the slice;
+  - leaves the app on the logged-out login screen (clean default precondition).
+- **No new Screen Object getter, no new utility, no changes to `src/screens/login.screen.ts` or `src/utils/`.** Only `tests/specs/auth/login-screen.spec.ts` (spec body + a small `SENSITIVE_PATTERNS` constant + `assertNoSensitiveData()` helper at the top of the file) and the new `test-cases/auth/LOGIN-TC-009.md`.
+- **Companion of `LOGIN-E2E-008`:** this scenario extends the R1 regression guard with the NFR-Security assertion. Same code path, same snackbar node, same proven getter.
+
+### Evidence / Validation
+
+- `npm run typecheck` → **PASS** (no output, exit 0).
+- `npm run lint` → **PASS** (no output, exit 0).
+- Physical-device test execution on the Samsung Galaxy A13 (`R58T90F5ALY`):
+  - Command: `DEVICE_UDID=R58T90F5ALY APP_NO_RESET=false npm test -- --mochaOpts.grep="LOGIN-E2E-009"`.
+  - **First attempt failed with `EADDRINUSE 127.0.0.1:4723`** (an orphaned Appium process from a prior run was holding the port; no Appium process was listening on the port at the time of the second attempt — likely exited on its own between runs). The failure was an infrastructure issue, not a test-logic issue. **Did not modify the implementation in response**; re-ran the test once the port was clear.
+  - Second attempt: **PASS** — `1 passing (4.3s)`, Spec Files 1 passed / 18 skipped / 19 total (100% completed) in 00:02:10, exit 0. Terminal output: `evidence/login009-run.txt`.
+- Snackbar assertion passed (`content-desc` equals the literal).
+- Sensitive-data assertions passed (six patterns × two surfaces = twelve checks, all clean).
+- App left in clean/default logged-out login screen state; snackbar self-dismissed; `loginScreen.waitUntilDisplayed()` confirmed at teardown.
+
+### Captured evidence
+
+- `evidence/login009-pre.xml` — pre-tap UI dump (login screen rendered, "Enter your email" button at `bounds="[45,1454][1035,1611]"`).
+- `evidence/login009-post.xml` — post-tap UI dump (snackbar at `bounds="[0,2107][1080,2273]"`, `content-desc="Email sign-in flow is not connected yet"`).
+- `evidence/login009-logcat.txt` — 200-line logcat slice around the tap (zero PUKU-process log lines outside touch-routing).
+- `evidence/login009-run.txt` — `npm test` terminal output for the controlled run.
+
+### Files changed
+
+- `tests/specs/auth/login-screen.spec.ts` — `it.skip` → active `it`; added a small `SENSITIVE_PATTERNS` constant + `assertNoSensitiveData()` helper at the top of the file (placed after the existing imports, with a comment justifying each pattern from the recon evidence).
+- `test-cases/auth/LOGIN-TC-009.md` — new, matching `LOGIN-TC-007.md` / `LOGIN-TC-008.md` format.
+- `ai-log/daily-progress.md` — this entry.
+
