@@ -639,3 +639,112 @@ A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.m
 - **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
 - **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
 ---
+
+## 2026-08-28 (QA2 — LOGIN-E2E-012, implementation only — physical validation pending)
+
+### Session Summary
+
+Implemented `LOGIN-E2E-012` (P2) — "Back navigation from Chrome OAuth redirect returns app to a sane login-screen state" — on a dedicated branch `feat/login-e2e-012` from current master (NOT from `feat/login-e2e-011`). Implementation complete and statically validated today; **physical-device validation is pending** because the Samsung Galaxy A13 (`R58T90F5ALY`) was disconnected and unavailable for execution by the end of the session.
+
+### What was done
+
+- **Branch:** `feat/login-e2e-012` created off current master (the user explicitly stated the branch must be based on `master`, not `feat/login-e2e-011`; `feat/login-e2e-011`'s unmerged helpers are therefore not visible to this branch, which is fine — LOGIN-E2E-012 needs no new helpers).
+- **Automation:** Replaced the `it.skip('LOGIN-E2E-012 ...')` stub in `tests/specs/auth/auth-secondary.spec.ts` with an active `it(...)` that:
+  - waits for the logged-out login screen via the existing `loginScreen.waitUntilDisplayed()`;
+  - taps "Continue with Google" via the existing `loginScreen.tapContinueWithGoogle()`;
+  - asserts the redirect by waiting up to 15s for `driver.getCurrentPackage() === 'com.android.chrome'` (the established pattern from LOGIN-E2E-007, line 103);
+  - performs the actual SUT action: a single `driver.back()` from the Chrome Custom Tab;
+  - asserts the back-nav result: `driver.waitUntil(getCurrentPackage() === 'sh.puku.app', timeout 10s)`;
+  - asserts the sane state via `loginScreen.waitUntilDisplayed()` (waits for `continueWithGoogleButton`, which is only present on the logged-out login screen — if OAuth had been completed the wait would fail);
+  - explicit teardown assertion: `expect(loginScreen.titleElement).toBeDisplayed()`, applying the "no crash / sane-state signal" from LOGIN-E2E-002 as a post-condition rather than leaving the clean default state implicit.
+- **Manual case authored:** `test-cases/auth/LOGIN-TC-012.md`, matching the `LOGIN-TC-007` / `LOGIN-TC-009` format. Status recorded as **Implementation Complete — Physical Validation Pending**. Actual Result section explicitly states that automated `npm test` execution has not yet happened; reconnaissance observations from today's probe are recorded as recon, not as the test's Actual Result.
+- **No new Screen Objects, no new helpers, no `src/utils/adb.ts` changes, no workflow changes.** Reuses `loginScreen` and the redirect-detection pattern from LOGIN-E2E-007 verbatim.
+- **No `evidence/login012-run.txt` was created.** Per the user's instruction, the actual terminal output will be captured during tomorrow's physical-device run.
+
+### Scenario contract (from `_bmad-output/test-artifacts/test-design-epic-auth-login.md` line 151)
+
+- **ID / priority:** `LOGIN-E2E-012` / P2.
+- **Risk link:** none (notes column is empty in the design doc); adjacent to R2 by topic only.
+- **Scope:** system back-press from a Chrome OAuth Custom Tab returns PUKU to its logged-out login screen.
+- **Boundary:** never asserts on Custom Tab content; never calls `oauthConsentScreen`; never requires a pre-authenticated Google account; never completes OAuth.
+
+### Reconnaissance findings (live on A13, 2026-08-28, prior to disconnection)
+
+- `dumpsys account` showed no `com.google` Google account present on `R58T90F5ALY` (the only `editorpuku@gmail.com` records remaining are Samsung-side sign-in artifacts: `com.osp.app.signin`, `com.samsung.android.mobileservice`, `com.samsung.android.coreapps`). Account-history row shows `action_account_remove 2026-08-27 16:38:54`, consistent with the prior note that the Google account was deliberately removed.
+- Tapping "Continue with Google" still hands off to `com.android.chrome/org.chromium.chrome.browser.customtabs.CustomTabActivity` within ~2s — the redirect is a property of PUKU's intent, not of the device's account state. Intent data = `https://puku.sh/api/oauth/authorize?response_type=code&client_id=puku-app&redirect_uri=puku%3A%2F%2Fcallback%2F&scope=openid+profile+email&code_challenge=...` (PUKU's own authorize endpoint, not Google's account chooser).
+- A single `adb shell input keyevent KEYCODE_BACK` returned the foreground to `sh.puku.app/.MainActivity`. The Custom Tab activity and the `flutter_web_auth_2.AuthenticationManagementActivity` waiter were both dismissed cleanly. PUKU resumed, IME target restored. No crash, no leftover Chrome activity.
+- **Implication for `LOGIN-E2E-007` documentation:** the existing `LOGIN-TC-007` / `LOGIN-E2E-007` comments assume that without `editorpuku@gmail.com` pre-authenticated, the same tap "lands on full Google credential entry / 2FA." That assumption was NOT supported by today's probe — PUKU's Custom Tab opened its own `puku.sh/api/oauth/authorize` page regardless of OS-level account state. This is out of scope for LOGIN-E2E-012, but is a separate doc-drift issue worth flagging when `LOGIN-E2E-007` is next touched.
+
+### Static validation (today)
+
+- `npm run typecheck` → PASS (run output captured separately).
+- `npm run lint` → PASS (run output captured separately).
+- `npm test` was **NOT** executed — the physical A13 was disconnected and the test requires `DEVICE_UDID` to be set per its self-skip pattern (same as LOGIN-E2E-006/007/011). The actual automated run will happen on the next day the device is connected.
+
+### Files changed
+
+- `tests/specs/auth/auth-secondary.spec.ts` — replaced LOGIN-E2E-012 `it.skip` stub with active `it(...)`; added `loginScreen` import. No other tests in the file were modified; the file's describe block name was NOT changed (kept as "P2/P3" per the user's instruction to keep the diff minimal).
+- `test-cases/auth/LOGIN-TC-012.md` — created.
+- `ai-log/daily-progress.md` — this entry.
+
+No other files modified. No commits, no pushes, no PRs.
+
+### Pending (for next-day physical-device run)
+
+- Run `npm test -- --mochaOpts.grep="LOGIN-E2E-012"` against `R58T90F5ALY`.
+- Capture terminal output to `evidence/login012-run.txt` (this file is intentionally NOT created today).
+- Update `test-cases/auth/LOGIN-TC-012.md` Actual Result + Status fields based on the actual run.
+- Update this daily-progress entry's Static validation section with the actual run result.
+
+---
+
+## 2026-08-31 (QA2 — LOGIN-E2E-012, physical validation + observability adjustment)
+
+### Session Summary
+
+Physically validated `LOGIN-E2E-012` (P2) — "Back navigation from Chrome OAuth redirect returns app to a sane login-screen state" — on the Samsung Galaxy A13 (`R58T90F5ALY`, Android 14, SM-A135F) against `apk/app-prod-release.apk` (PUKU 1.0.3, lastUpdateTime 2026-08-11 12:49:23). Implementation status is now **Pass**. Also made one minimal observability adjustment (a 1-second explicit `driver.pause(1000)` between the "Continue with Google" tap and the existing Chrome-package wait) to make the intermediate Chrome Custom Tab transition visibly observable during local physical execution; the package-wait synchronization that follows is unchanged.
+
+### External context (carried in, not resolved today)
+
+- The repository's GitHub account remains under GitHub's manual abuse-detection review (flagged 2026-08-29; Saturday and Sunday followed with no update as of 2026-08-31 morning). GitHub Support indicated an update may arrive during the week. **No workflow workarounds attempted; no Actions triggered today.** No PRs created, pushed, or merged. PR #14 (`feat/login-e2e-009` → master) and PR #13 (`feat/login-e2e-010` → master) remain OPEN, MERGEABLE, with empty `statusCheckRollup`. PR #11 LOGIN-E2E-006 remains MERGED. No PR exists for LOGIN-E2E-011, LOGIN-E2E-012, CHAT-E2E-008, or CHAT-E2E-019.
+
+### What was done
+
+- **Reconnaissance:** `R58T90F5ALY` reachable via ADB; Android 14, SM-A135F; `sh.puku.app` installed (version 1.0.3, lastUpdateTime unchanged). At start of day, Android Launcher was foreground and PUKU was backgrounded (PID 8230 alive). No data clear, no account manipulation, no network toggle.
+- **Precondition:** PUKU brought to foreground via `adb shell monkey -p sh.puku.app -c android.intent.category.LAUNCHER 1` (no data clear, no cold start — PID 8230 unchanged across the foreground request).
+- **First physical run** (initial implementation, no observability pause):
+  - Command: `DEVICE_UDID=R58T90F5ALY PUKU_APK_PATH=apk/app-prod-release.apk npm test -- --mochaOpts.grep="LOGIN-E2E-012"`
+  - **Result:** PASS. `1 passing (8.7s)`, exit 0. Session ID `f61d32e6-c7c4-44c6-bb31-b40a0b52525c`. Spec files 1 passed, 18 skipped (other specs grep-filtered), 19 total. The full terminal output (originally captured to `evidence/login012-run.txt`) was subsequently overwritten by the second run below; the first-run summary is preserved here.
+  - Sequence observed: tap Continue with Google → Chrome Custom Tab foreground (mobile: getCurrentPackage → `com.android.chrome` at 05:47:23.582Z) → `driver.back()` → PUKU foreground (mobile: getCurrentPackage → `sh.puku.app` at 05:47:27.595Z) → `loginScreen.waitUntilDisplayed()` → title assertion passed.
+  - **Operator observation:** the Chrome→back→PUKU transition completed in roughly 4 seconds. The intermediate Chrome Custom Tab window was technically observable but visually compressed for a human observer — the transition felt "too fast to clearly see the Chrome Custom Tab." This triggered the observability adjustment below; it did NOT trigger any change to the scenario's logic, assertions, or package waits.
+  - **Static validation after first run:** `npm run typecheck` → PASS (exit 0, empty output); `npm run lint` → PASS (exit 0, empty output). Captured to `evidence/login012-typecheck.txt` and `evidence/login012-lint.txt`.
+- **Implementation change (observability):** added a single line `await driver.pause(1000);` in `tests/specs/auth/auth-secondary.spec.ts`, positioned immediately after `await loginScreen.tapContinueWithGoogle();` and immediately before the existing `driver.waitUntil(getCurrentPackage() === 'com.android.chrome', { timeout: 15000 })`. With explanatory comment.
+  - **What was NOT changed:** the package wait (15s timeout), the back-press action, all assertions (the `waitUntil` for `sh.puku.app`, the `loginScreen.waitUntilDisplayed()`, and the `expect(loginScreen.titleElement).toBeDisplayed()` teardown), the test's scope/contract, the file's describe block name, the `it.skip` stubs for the other tests in the file, and the `loginScreen` import. No `src/` production-source changes. No timeout changes — the 1-second pause is well under all existing timeouts (10s `waitForElement` for login screen, 10s `waitUntil` for `sh.puku.app`, 15s `waitUntil` for `com.android.chrome`, 60s Mocha test timeout) and does not make any of them insufficient.
+  - **Why:** QA2 observed that the Chrome Custom Tab transition was too fast to clearly observe the Chrome Custom Tab / system Back portion of the scenario. A 1-second pause makes the Chrome foreground window clearly visible to a human operator without altering the synchronization that the test actually relies on.
+- **Second physical run** (post-observability-pause — the variant retained in the implementation):
+  - Command: `DEVICE_UDID=R58T90F5ALY PUKU_APK_PATH=apk/app-prod-release.apk npm test -- --mochaOpts.grep="LOGIN-E2E-012"`
+  - **Result:** PASS. `1 passing (7.5s)`, exit 0. Session ID `14275f8e-b1f8-482c-b011-d7806d14ed88`. Spec files 1 passed, 18 skipped, 19 total.
+  - Sequence observed with explicit timestamps from the Appium/WebdriverIO log:
+    1. Login screen present — `findElement("Continue with Google")` succeeded at 06:07:49.574Z, displayed=true at 06:07:50.551Z.
+    2. Tap "Continue with Google" — `elementClick` posted at 06:07:50.653Z, server-confirmed at 06:07:51.486Z.
+    3. `driver.pause(1000)` between tap and Chrome-wait (not visible in the Appium command log because it is a client-side wait, but present in the source and reflected in the ~1s gap between the click-result at 06:07:51.486Z and the first package-poll at 06:07:52.503Z).
+    4. Chrome Custom Tab foreground — `mobile: getCurrentPackage` returned `com.android.chrome` at 06:07:52.691Z. Chrome remained foreground through 06:07:54.698Z (~2 seconds of visible Chrome Custom Tab on the device).
+    5. System back-press performed by the test — `back()` posted at 06:07:52.692Z, server-confirmed at 06:07:54.696Z. (No manual back-press by the operator; the test drove the action.)
+    6. PUKU returns — `mobile: getCurrentPackage` returned `sh.puku.app` at 06:07:54.823Z.
+    7. Login screen visible — `findElement("Continue with Google")` succeeded at 06:07:54.824Z, displayed=true at 06:07:55.393Z.
+    8. Title assertion passes — `findElement("Puku Editor")` succeeded at 06:07:55.397Z, displayed=true at 06:07:55.575Z. Teardown `expect(loginScreen.titleElement).toBeDisplayed()` passed.
+  - **Operator observation:** the Chrome Custom Tab window was visibly observable on the device between 06:07:52.691Z and 06:07:54.823Z. The sequence (login screen → tap → Chrome → back → PUKU → login screen → title assertion) was clearly visible to the operator.
+- **Static validation after second run:** `npm run typecheck` → PASS (exit 0, empty output); `npm run lint` → PASS (exit 0, empty output). Captured to the same `evidence/login012-typecheck.txt` and `evidence/login012-lint.txt` (overwritten from the first run; the file content is identical because only the test source was changed and `tsc --noEmit` + `eslint .` both pass cleanly).
+- **Post-condition verification (read-only):** PUKU package still installed, version 1.0.3, lastUpdateTime 2026-08-11 12:49:23 (unchanged — no reinstall). After Appium's `deleteSession()` ended the session, foreground returned to Launcher; PUKU process no longer in `ps -A` (Appium session teardown stopped the app, normal framework behavior, not a crash). Crash buffer contains no FATAL/AndroidRuntime entries from this run — the only `FATAL EXCEPTION` in the buffer is from 2026-08-24, predating today by a week (a stale Appium UiAutomator2 server teardown crash unrelated to LOGIN-E2E-012). Recent logcat (08-31 11:50–11:51) shows only normal Bluetooth scan output; no PUKU-side crashes. `dumpsys account` shows no `com.google` Google account was added or modified — only the pre-existing `Meet` entry and standard service descriptors.
+- **Documentation updates:**
+  - `test-cases/auth/LOGIN-TC-012.md` — Actual Result section rewritten to record both physical runs and the full Chrome→back→PUKU→login-screen→title sequence with timestamps; Status heading changed from "Implementation Complete — Physical Validation Pending" to "Pass"; the trailing Notes bullet on the linked automated test changed from "physical-device run pending" to "physically validated on 2026-08-31."
+  - `ai-log/daily-progress.md` — this Day-12 entry.
+  - No other Markdown files modified. No historical entries (2026-08-28, 2026-08-26, etc.) altered.
+
+### Files changed
+
+- `tests/specs/auth/auth-secondary.spec.ts` — added `await driver.pause(1000);` and the explanatory comment block between the "Continue with Google" tap and the existing Chrome-package wait. No other tests in the file were modified; the file's describe block name was NOT changed (kept as "P2/P3").
+- `test-cases/auth/LOGIN-TC-012.md` — Actual Result section rewritten; Status heading updated to "Pass"; one Notes bullet updated.
+- `ai-log/daily-progress.md` — this Day-12 entry.
+
+No `src/`, `src/utils/`, `src/screens/`, workflow files, or CI files modified. No commits, no pushes, no PRs. No Actions triggered.
