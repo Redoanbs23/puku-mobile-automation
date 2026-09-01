@@ -27,11 +27,11 @@ Two epics designed, both partially automated:
 |---|---|---|
 | Risks registered | 7 (`R1`–`R7`) | 8 new (`R8`–`R15`) |
 | Scenarios designed | 14 | 19 |
-| Scenarios scaffolded in code | 14 (all of them) | 3 |
-| — of those, passing | 3 | 3 |
-| — of those, `it.skip()` stubs | 11 | 0 |
+| Scenarios scaffolded in code | 14 (all of them) | 15 |
+| — of those, active (`it(...)`) | 5 | 15 |
+| — of those, `it.skip()` stubs | 9 | 0 |
 
-**6 tests pass today**, all verified against a physical device: `LOGIN-E2E-002`, `AUTH-E2E-015`, `AUTH-E2E-016`, `CHAT-E2E-001`, `CHAT-E2E-002`, `CHAT-E2E-003`. 13 more `auth-login` scenarios exist as `it.skip()` scaffolds awaiting implementation. `chat-core`'s remaining 16 scenarios (P1–P3) exist only in its test-design document — not yet scaffolded into spec files at all. 6 manual test cases exist, traced 1:1 to the 6 passing automated scenarios.
+**22 automated scenarios are active today.** The `auth-login` epic has 5 active scenarios (`LOGIN-E2E-002`, `005`, `006`, `007`, `008`) — `LOGIN-E2E-002/005/008` run against either the emulator or a physical device; `LOGIN-E2E-006/007` self-skip without a pre-authenticated physical device (ADR-006) — plus 2 active auth-flow scenarios (`AUTH-E2E-015/016`) that also require the pre-authenticated physical device. The `chat-core` epic has 15 active scenarios (`CHAT-E2E-001/002/003/004/005/006/007/009/010/011/012/013/014/015/017`), all of which self-skip without `DEVICE_UDID`. 9 `auth-login` scenarios remain as `it.skip()` scaffolds (`LOGIN-E2E-001/003/004/009/010/011/012/013/014`). Four `chat-core` scenarios (`CHAT-E2E-008`, `016`, `018`, `019`) are designed in the test-design document but are not currently present as active specs on master — their dispositions are not ordinary "unfinished automation" and are not represented as such here. The exact scenario-to-spec mapping lives in [`docs/running-tests.md`](docs/running-tests.md).
 
 ## Architecture overview
 

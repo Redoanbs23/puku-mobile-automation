@@ -68,18 +68,34 @@ DEVICE_UDID=RF8T802226Y npm test
 
 ## Currently implemented scenarios
 
-Pulled directly from the spec files — only active (`it(...)`) tests are listed; `it.skip(...)` stubs are scaffolds for scenarios not yet automated.
+Pulled directly from the spec files on master — only active (`it(...)`) tests are listed; `it.skip(...)` stubs are scaffolds for scenarios not yet automated.
 
 | Scenario ID | File | Requires `DEVICE_UDID` |
 |---|---|---|
 | `LOGIN-E2E-002` | `tests/specs/auth/login-screen.spec.ts` | No |
+| `LOGIN-E2E-005` | `tests/specs/auth/login-screen.spec.ts` | No |
+| `LOGIN-E2E-006` | `tests/specs/auth/login-screen.spec.ts` | Yes |
+| `LOGIN-E2E-007` | `tests/specs/auth/login-screen.spec.ts` | Yes |
+| `LOGIN-E2E-008` | `tests/specs/auth/login-screen.spec.ts` | No |
 | `AUTH-E2E-015` | `tests/specs/auth/oauth-consent.spec.ts` | Yes |
 | `AUTH-E2E-016` | `tests/specs/auth/logout.spec.ts` | Yes |
 | `CHAT-E2E-001` | `tests/specs/chat/home-screen.spec.ts` | Yes |
 | `CHAT-E2E-002` | `tests/specs/chat/send-message.spec.ts` | Yes |
 | `CHAT-E2E-003` | `tests/specs/chat/drawer.spec.ts` | Yes |
+| `CHAT-E2E-004` | `tests/specs/chat/model-selector.spec.ts` | Yes |
+| `CHAT-E2E-005` | `tests/specs/chat/model-switch.spec.ts` | Yes |
+| `CHAT-E2E-006` | `tests/specs/chat/new-chat.spec.ts` | Yes |
+| `CHAT-E2E-007` | `tests/specs/chat/empty-message.spec.ts` | Yes |
+| `CHAT-E2E-009` | `tests/specs/chat/chat-history.spec.ts` | Yes |
+| `CHAT-E2E-010` | `tests/specs/chat/settings-toggles.spec.ts` | Yes |
+| `CHAT-E2E-011` | `tests/specs/chat/projects-section.spec.ts` | Yes |
+| `CHAT-E2E-012` | `tests/specs/chat/artifacts-section.spec.ts` | Yes |
+| `CHAT-E2E-013` | `tests/specs/chat/code-section.spec.ts` | Yes |
+| `CHAT-E2E-014` | `tests/specs/chat/long-message.spec.ts` | Yes |
+| `CHAT-E2E-015` | `tests/specs/chat/locator-health.spec.ts` | Yes |
+| `CHAT-E2E-017` | `tests/specs/chat/rotation.spec.ts` | Yes |
 
-Everything else across `tests/specs/` is currently an `it.skip()` stub (see `tests/specs/auth/login-screen.spec.ts` and `tests/specs/auth/auth-secondary.spec.ts` for the full list of scaffolded-but-not-yet-automated scenarios).
+Nine `auth-login` scenarios remain as `it.skip()` scaffolds awaiting implementation (`LOGIN-E2E-001/003/004/009/010/011/012/013/014` — see `tests/specs/auth/login-screen.spec.ts` and `tests/specs/auth/auth-secondary.spec.ts`). Four `chat-core` scenarios from the test-design coverage matrix are **not** currently present as active specs on master (`CHAT-E2E-008`, `CHAT-E2E-016`, `CHAT-E2E-018`, `CHAT-E2E-019`) — these are not ordinary unfinished automation: `CHAT-E2E-016` is weekly/manual-only per R8; `CHAT-E2E-018` is permanently manual-only per R11; and the implementation status of `CHAT-E2E-008` and `CHAT-E2E-019` is recorded separately in `ai-log/daily-progress.md` (do not treat their absence here as "unfinished").
 
 ## A note on R8 — don't run cost-triggering scenarios repeatedly
 

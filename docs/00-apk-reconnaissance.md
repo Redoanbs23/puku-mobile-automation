@@ -57,6 +57,8 @@ Tapping **"Enter your email"** on the login screen shows a toast: **"Email sign 
 
 ### Google OAuth is not a practical automation target
 
+> **Historical note (added 2026-09-01) — superseded/narrowed by [ADR-006](../adr/ADR-006-oauth-consent-automation.md).** The original assessment below assumed completing Google OAuth meant typing Google credentials and clearing 2FA in a system Chrome browser. That credential-entry/2FA path is still outside this project's supported automation scope (per the original R2 reasoning and the ADR's narrowed scope). However, on a device with a Google account already signed in at the OS level, the practical flow is a one-tap consent screen rendered as PUKU's own `puku.sh` page in a Chrome Custom Tab — not Google's UI. That pre-authenticated-device OAuth consent flow is now automated end-to-end: [`AUTH-E2E-015`](../../tests/specs/auth/oauth-consent.spec.ts) (full Continue with Google → Authorize → logged-in round trip) and [`LOGIN-E2E-007`](../../tests/specs/auth/login-screen.spec.ts) (redirect-only variant, stops at the consent screen without completing OAuth) are both active scenarios. See [ADR-006](../adr/ADR-006-oauth-consent-automation.md) for the full correction, scope narrowing, and risk disposition.
+
 While the "Continue with Google" redirect itself can be verified (does tapping the button correctly launch Chrome with a Google consent screen?), completing the OAuth flow end-to-end is not being pursued as an automation target. Reasons:
 
 - Requires a live, pre-configured Google account tied to the test environment
