@@ -137,17 +137,17 @@ CI strategy assessment with Murat (self-hosted physical-device runner rejected o
 
 ### Chronological Log
 
-1. **CI risk assessment (conversation, no artifact yet)** — weighed a self-hosted GitHub Actions runner on `RF8T802226Y` (which would let `AUTH-E2E-015`/`016` and all `CHAT-E2E-` scenarios run in CI) against `R2`, `R3`, and `R8`. **Recommended against it**, on two structural grounds rather than tunable ones: `R2` gets actively *worse* under CI (repeated automated Google re-auth at a frequency no human controls is exactly the bot-detection trigger R2 warns about, and a challenge screen in CI fails with nobody present to resolve it), and `R3` is a known-bad pattern — a self-hosted runner on a public repo lets a malicious fork PR execute on a machine holding a live authenticated Google session. `R8` is the *least* of the three: a real violation of its own gate if `CHAT-E2E-002` ran on every push, but the only one with a clean mechanical fix. **Decision: keep CI limited to emulator-safe scenarios; treat the physical-device suite as permanently local-only.** Middle ground identified if partial movement is ever wanted: a self-hosted runner gated to `workflow_dispatch` only (never `push`/`pull_request`), which removes R3's sharpest edge but does *not* fully address R2's frequency concern.
+1. **CI risk assessment (conversation, no artifact yet)** — weighed a self-hosted GitHub Actions runner on `RF8T802226Y` (which would let `AUTH-E2E-015`/`016` and all `CHAT-E2E-` scenarios run in CI) against `R2`, `R3`, and `R8`. **Recommended against it**, on two structural grounds rather than tunable ones: `R2` gets actively _worse_ under CI (repeated automated Google re-auth at a frequency no human controls is exactly the bot-detection trigger R2 warns about, and a challenge screen in CI fails with nobody present to resolve it), and `R3` is a known-bad pattern — a self-hosted runner on a public repo lets a malicious fork PR execute on a machine holding a live authenticated Google session. `R8` is the _least_ of the three: a real violation of its own gate if `CHAT-E2E-002` ran on every push, but the only one with a clean mechanical fix. **Decision: keep CI limited to emulator-safe scenarios; treat the physical-device suite as permanently local-only.** Middle ground identified if partial movement is ever wanted: a self-hosted runner gated to `workflow_dispatch` only (never `push`/`pull_request`), which removes R3's sharpest edge but does _not_ fully address R2's frequency concern.
 
-2. **Confirmed emulator/physical-device disambiguation in `config/wdio.android.conf.ts`** — verified two ways rather than assumed. Traced the installed driver source (`appium:avd` → `getRunningAVDWithRetry` → `getRunningAVD` → `getConnectedEmulators()`, which filters to `emulator-XXXX` serials *before* AVD-name matching, so a physical device structurally cannot match), then confirmed live by cross-referencing both devices' logcat against the test's completion timestamp. **Appium's own device targeting is unambiguous.**
+2. **Confirmed emulator/physical-device disambiguation in `config/wdio.android.conf.ts`** — verified two ways rather than assumed. Traced the installed driver source (`appium:avd` → `getRunningAVDWithRetry` → `getRunningAVD` → `getConnectedEmulators()`, which filters to `emulator-XXXX` serials _before_ AVD-name matching, so a physical device structurally cannot match), then confirmed live by cross-referencing both devices' logcat against the test's completion timestamp. **Appium's own device targeting is unambiguous.**
 
-3. **Found a real bug the above check surfaced** — `LOGIN-E2E-002` passed on the emulator but emitted a stray `adb: more than one device/emulator` during teardown. Root cause: `deviceArgs()` in `src/utils/adb.ts` only added `-s <udid>` when `DEVICE_UDID` was *set*. With it unset and two devices attached, the failure-capture hooks' own bare `adb` calls were ambiguous — meaning `R6`'s screen-recording capture was **silently non-functional in that configuration, on every test**. Not caught earlier because the calls are best-effort (`try/catch`) or fire-and-forget (`spawn`), so nothing failed loudly.
+3. **Found a real bug the above check surfaced** — `LOGIN-E2E-002` passed on the emulator but emitted a stray `adb: more than one device/emulator` during teardown. Root cause: `deviceArgs()` in `src/utils/adb.ts` only added `-s <udid>` when `DEVICE_UDID` was _set_. With it unset and two devices attached, the failure-capture hooks' own bare `adb` calls were ambiguous — meaning `R6`'s screen-recording capture was **silently non-functional in that configuration, on every test**. Not caught earlier because the calls are best-effort (`try/catch`) or fire-and-forget (`spawn`), so nothing failed loudly.
 
 4. **Fixed `deviceArgs()`** with an explicit resolution order: `DEVICE_UDID` if set → exactly one attached device, target it explicitly anyway → multiple devices with exactly one emulator, prefer the emulator (the CI-safe, credential-free default per the assessment in item 1) → otherwise **throw** rather than silently falling back to an unscoped call. Re-ran `LOGIN-E2E-002`: warning gone, zero ambiguity errors.
 
-5. **Ran the emulator comparison** — `LOGIN-E2E-002` passes; `AUTH-E2E-015`, `AUTH-E2E-016`, `CHAT-E2E-001`, `CHAT-E2E-003` all fail with the *identical* error. Documented in the new `docs/emulator-vs-device-comparison.md`.
+5. **Ran the emulator comparison** — `LOGIN-E2E-002` passes; `AUTH-E2E-015`, `AUTH-E2E-016`, `CHAT-E2E-001`, `CHAT-E2E-003` all fail with the _identical_ error. Documented in the new `docs/emulator-vs-device-comparison.md`.
 
-6. **`AUTH-E2E-015`'s emulator failure was not what was predicted.** The Play Integrity / SafetyNet hypothesis is **not supported**. The emulator authenticates, renders PUKU's consent page showing `Signed in as editorpuku@gmail.com` (so the emulator *is* pre-authenticated too — previously undocumented), taps Authorize, fires `flutter_web_auth_2.CallbackActivity`, and returns to `sh.puku.app`. It fails only at the final home-screen wait. Root cause left unconfirmed (slow emulator vs. session not established) — per standing instruction, documented rather than retried. Also recorded a **misleading-evidence trap**: emulator logcat shows `ro.product.*_for_attestation` denials that superficially confirm the attestation theory but actually originate from the investigation's own `adb shell` commands (`scontext=u:r:shell:s0`), not from PUKU.
+6. **`AUTH-E2E-015`'s emulator failure was not what was predicted.** The Play Integrity / SafetyNet hypothesis is **not supported**. The emulator authenticates, renders PUKU's consent page showing `Signed in as editorpuku@gmail.com` (so the emulator _is_ pre-authenticated too — previously undocumented), taps Authorize, fires `flutter_web_auth_2.CallbackActivity`, and returns to `sh.puku.app`. It fails only at the final home-screen wait. Root cause left unconfirmed (slow emulator vs. session not established) — per standing instruction, documented rather than retried. Also recorded a **misleading-evidence trap**: emulator logcat shows `ro.product.*_for_attestation` denials that superficially confirm the attestation theory but actually originate from the investigation's own `adb shell` commands (`scontext=u:r:shell:s0`), not from PUKU.
 
 7. **Wrote the remaining 16 chat-core manual test cases** — `CHAT-TC-004` through `CHAT-TC-019`, all marked "Designed, not yet automated" with `Status: Not Run` rather than claiming a passing status. `CHAT-TC-018` (voice) is marked permanently manual-only per `R11`, distinct from the merely not-yet-automated ones.
 
@@ -157,7 +157,7 @@ CI strategy assessment with Murat (self-hosted physical-device runner rejected o
 
 - **No self-hosted CI runner.** Two of the three named risks (`R2`, `R3`) are structural mismatches between what CI assumes (ephemeral, safe against untrusted changes) and what this suite requires (one irreplaceable, stateful, credential-bearing phone) — not problems a constraint can tune away.
 - **`deviceArgs()` throws rather than guesses** when it cannot safely disambiguate. Consistent with how every other ambiguity in this project has been handled — fail loudly rather than pick silently.
-- **The physical-device dependency is narrower than documented.** It is *not* "OAuth can't work on an emulator." That reframing is recorded because it changes what a future fix would target.
+- **The physical-device dependency is narrower than documented.** It is _not_ "OAuth can't work on an emulator." That reframing is recorded because it changes what a future fix would target.
 
 ### Observations / Doc Gaps
 
@@ -189,15 +189,15 @@ A one-hour autonomous session tasked with implementing chat-core's not-yet-autom
 3. **Fixed it as an opt-in, non-breaking config change**: `'appium:noReset': process.env.APP_NO_RESET === 'true'`, default unchanged (`false`) so `LOGIN-E2E-002`/`AUTH-E2E-015`/`016` keep resetting to a clean logged-out state as they require. Verified via a dry import of the config (capabilities resolve to `false` by default, `true` with the env var set) — not verified end-to-end, since that would require either a manual re-login or retrying the barred OAuth flow.
 4. **Corrected two stale doc comments found in the process**: `ensureLoggedIn()`'s docstring wrongly claimed `noReset:true` (the actual default is `false` — this exact mismatch is what caused the bug); `completeGoogleSignIn()`'s docstring still described the OAuth-stall root cause as untested when two experiments (timeout, GPU backend) had already ruled hypotheses out on 2026-08-06.
 5. **Did not implement any of the assigned P1-P3 scenarios**, at this point in the session. All of them (`CHAT-E2E-004`, `006`, `007`, `009`–`013`, `017`) require a logged-in home screen to even begin, which is unreachable this session without violating the boundary against retrying the OAuth flow. Writing their locators from the test-design doc's prose instead of live-confirming them would also break this project's established discipline (see `test-design-epic-chat-core.md`'s Notes columns, all written from actual live exploration). Left `test-cases/chat/CHAT-TC-004` through `017`/`019` untouched at this point — still accurately "Not Run" as of here. **(Superseded below — the session continued.)**
-6. **Redoan manually re-authenticated the emulator** outside of automation, confirming PUKU went straight to the logged-in home screen with zero interaction needed. Re-running `CHAT-E2E-001` with `APP_NO_RESET=true` still did not short-circuit — it fell through to `completeGoogleSignIn()`, which itself failed with a *different* signature than the closed OAuth-stall investigation: `homeScreen.isDisplayed()` queried once, 5.1s after session start, found nothing, and `attemptGoogleSignIn()` then polled 10s for `~Continue with Google` and found that missing too — meaning the app was never on the login screen at any point, just still mid-launch. A plain `adb shell dumpsys window` + `uiautomator dump` immediately afterward showed the app already back on the true home screen, ruling out both "`APP_NO_RESET` not applied" and "Appium reset it anyway."
+6. **Redoan manually re-authenticated the emulator** outside of automation, confirming PUKU went straight to the logged-in home screen with zero interaction needed. Re-running `CHAT-E2E-001` with `APP_NO_RESET=true` still did not short-circuit — it fell through to `completeGoogleSignIn()`, which itself failed with a _different_ signature than the closed OAuth-stall investigation: `homeScreen.isDisplayed()` queried once, 5.1s after session start, found nothing, and `attemptGoogleSignIn()` then polled 10s for `~Continue with Google` and found that missing too — meaning the app was never on the login screen at any point, just still mid-launch. A plain `adb shell dumpsys window` + `uiautomator dump` immediately afterward showed the app already back on the true home screen, ruling out both "`APP_NO_RESET` not applied" and "Appium reset it anyway."
 7. **Root-caused and fixed a second, distinct bug**: `HomeScreen.isDisplayed()` (`src/screens/home.screen.ts`) did a single non-retried check with no polling window, never previously exposed because the old `noReset:false` default always launched into a fast-rendering login screen — nothing to race. `APP_NO_RESET=true` introduced a session-restoring cold launch that could legitimately take longer than an instant, and the check misread the delay as "not logged in." Fixed with a 4-second poll window (`waitForElement`), returning `false` only on genuine timeout. Documented in full in `docs/emulator-vs-device-comparison.md`'s 2026-08-07 entries (kept as two separate dated findings, not merged, since the two bugs have independent causes).
 8. **Verified the fix end-to-end**: re-ran `CHAT-E2E-001` once more with the same command — passed in 9.5s, confirmed via log inspection that only `chatPromptHeading`/`chatInputField`/`modelSelector` were ever queried, no `~Continue with Google` lookup anywhere, i.e. no fall-through to `completeGoogleSignIn()` at all.
-9. **Implemented the original 9-scenario backlog** (`CHAT-E2E-004`, `006`, `007`, `009`–`013`, `017`) against the now-genuinely-working logged-in emulator session, with live-locator exploration for each per the project's standing discipline. **Result: 8 of 9 passed.** Notable findings along the way: the model selector's opened dialog lists `puku-ai-2.7`, `puku-ai-2.8`, and `Opus 4.8` *simultaneously* (not simple version drift); Projects' back control has no content-desc (a new accessibility gap, same class as the hamburger trigger); Settings' "Notifications" row is a non-functional placeholder ("Notifications action placeholder" toast, no real toggle); `CHAT-E2E-006` ("New chat") could only be automated in a scope-limited form, since proving it resets *from* visible content would have required a fresh message send (R8). `CHAT-E2E-017` (rotation) correctly handled PUKU's confirmed portrait lock but then hit a second, different failure (`chatInputField` not found) that was flagged rather than chased, per the standing "stop and report, don't sink time into one blocker" instruction. All 9 new spec files plus 2 new screen objects (`chat-history.screen.ts`, `sections.screen.ts`) and 8 `CHAT-TC-*.md` status updates were left **uncommitted** for review.
+9. **Implemented the original 9-scenario backlog** (`CHAT-E2E-004`, `006`, `007`, `009`–`013`, `017`) against the now-genuinely-working logged-in emulator session, with live-locator exploration for each per the project's standing discipline. **Result: 8 of 9 passed.** Notable findings along the way: the model selector's opened dialog lists `puku-ai-2.7`, `puku-ai-2.8`, and `Opus 4.8` _simultaneously_ (not simple version drift); Projects' back control has no content-desc (a new accessibility gap, same class as the hamburger trigger); Settings' "Notifications" row is a non-functional placeholder ("Notifications action placeholder" toast, no real toggle); `CHAT-E2E-006` ("New chat") could only be automated in a scope-limited form, since proving it resets _from_ visible content would have required a fresh message send (R8). `CHAT-E2E-017` (rotation) correctly handled PUKU's confirmed portrait lock but then hit a second, different failure (`chatInputField` not found) that was flagged rather than chased, per the standing "stop and report, don't sink time into one blocker" instruction. All 9 new spec files plus 2 new screen objects (`chat-history.screen.ts`, `sections.screen.ts`) and 8 `CHAT-TC-*.md` status updates were left **uncommitted** for review.
 
 ### Key Decisions
 
 - **Stopped rather than guessed.** The task's own instructions required live locator confirmation before automating anything; with the logged-in path unreachable, guessing would have violated that discipline for no real coverage gain.
-- **Treated the `noReset` finding as a distinct bug, not a retry of the closed OAuth-stall investigation.** It concerns state destroyed *before* any OAuth flow starts, and was fixed without invoking OAuth automation at all — consistent with the boundary, not adjacent to it.
+- **Treated the `noReset` finding as a distinct bug, not a retry of the closed OAuth-stall investigation.** It concerns state destroyed _before_ any OAuth flow starts, and was fixed without invoking OAuth automation at all — consistent with the boundary, not adjacent to it.
 - **Left the config default unchanged.** `APP_NO_RESET` is opt-in specifically so every existing passing test keeps its current guarantees; flipping the default would have silently broken `LOGIN-E2E-002` and both `AUTH-E2E-` scenarios that depend on starting logged out.
 
 ### Observations / Doc Gaps
@@ -220,7 +220,7 @@ A one-hour autonomous session tasked with implementing chat-core's not-yet-autom
 
 PUKU updated to build `1.0.3` (`versionCode=9`) on the physical device (`RF8T802226Y`) between sessions — not something this automation triggered, an update that just happened to land. Re-ran the full 13-scenario suite against it (`LOGIN-E2E-002`, `AUTH-E2E-015/016`, `CHAT-E2E-001/003/004/006/007/009/010/011/012/013`; `CHAT-E2E-002` deliberately excluded, R8) and got an identical result to the pre-update run: **13/13 passed, zero regressions.**
 
-This is the first confirmed case of the project's locator strategy surviving a real app update rather than a same-build re-run — directly relevant evidence for **R4** (content-desc exposure can regress silently on updates; it didn't, this time) and **R5** (build/version drift risk; the exact version now under test is recorded here: `1.0.3` / `versionCode=9`). Worth re-running this same suite again on the *next* update rather than treating one clean pass as a standing guarantee — R4's risk is that it regresses *silently*, so this needs to keep being checked, not just checked once.
+This is the first confirmed case of the project's locator strategy surviving a real app update rather than a same-build re-run — directly relevant evidence for **R4** (content-desc exposure can regress silently on updates; it didn't, this time) and **R5** (build/version drift risk; the exact version now under test is recorded here: `1.0.3` / `versionCode=9`). Worth re-running this same suite again on the _next_ update rather than treating one clean pass as a standing guarantee — R4's risk is that it regresses _silently_, so this needs to keep being checked, not just checked once.
 
 **Priority shift, Redoan's explicit decision:** CI infrastructure work (building the pre-authenticated CI emulator snapshot per the CI/CD readiness analysis) now takes priority over the remaining auth-login P0 stubs (`LOGIN-E2E-005`/`008`). This is a deliberate reprioritization, not an abandonment of the sequencing plan agreed with Murat.
 
@@ -269,6 +269,7 @@ Wired up the cross-repo CI/CD trigger end to end: two new tokens, the release-tr
 1. Waiting on the app team to push a real version tag (unblocks the app repo's Build workflow, which has never run).
 2. Waiting on `smrefat02`'s review of PR #58 on the app repo.
 3. Once both land: a genuine end-to-end verification (tag push → Build runs → release created → dispatch fires → automation CI runs → report generated) before considering today's CI/CD work fully proven.
+
 ---
 
 ## 2026-08-12 (QA2 — CHAT-E2E-014)
@@ -309,6 +310,7 @@ Joined the PUKU mobile automation project as QA2 with responsibility for the Cha
 
 - Review `docs/source-analysis/` documents relevant to Chat-core and `CHAT-E2E-014`.
 - Verify genuinely new locators live before implementing; implement; run on the physical device; run `typecheck`/`lint`; confirm clean/default state; update the manual test case.
+
 ---
 
 ## 2026-08-13 (QA2 — CHAT-E2E-014)
@@ -343,6 +345,7 @@ Read-only recon plus implementation and physical-device validation attempt for `
 ### Next Steps
 
 - Await QA2/mentor diff review / decision (app-side a11y fix OR re-scope approval). Do **not** open a PR until resolved.
+
 ---
 
 ## 2026-08-14 (QA2 — CHAT-E2E-014)
@@ -377,6 +380,7 @@ Mentor-approved assertion re-scope for `CHAT-E2E-014` and final physical-device 
 
 - No new blocker for `CHAT-E2E-014` after Day 3 (re-scope resolved the Day-2 automation blocker).
 - Existing blocker: `CHAT-E2E-017` (device rotation / keyboard dismissal / accessibility) — untouched.
+
 ---
 
 ## 2026-08-18 (QA2 — CHAT-E2E-015)
@@ -418,6 +422,7 @@ Read-only reconnaissance for `CHAT-E2E-015` and began implementation planning. C
 - No `CHAT-E2E-015` implementation files were created.
 - No implementation commit was made.
 - No CI workflow changes were made.
+
 ---
 
 ## 2026-08-19 (QA2 — CHAT-E2E-015)
@@ -449,6 +454,7 @@ Continued and finalized `CHAT-E2E-015` locator-health implementation. Corrected 
 ### Status / Reconcile note (migration)
 
 - `contribution.md` recorded "No commit or PR created yet" on Day 5. **Since then the work has been committed and pushed on this branch (`feat/chat-e2e-015`) with an open PR.** The implementation (`tests/specs/chat/locator-health.spec.ts`, `src/utils/locator-health.ts`) and the manual test case update (`test-cases/chat/CHAT-TC-015.md`) are all present on the branch. No CI workflow changes were made.
+
 ---
 
 ## 2026-08-24 (QA2 — LOGIN-E2E-005)
@@ -479,6 +485,7 @@ Implemented `LOGIN-E2E-005` (P0) — "Both auth entry points render (Continue wi
 
 - The QA2 contribution-log convention used on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid creating a new documentation system I appended this entry to the established `ai-log/daily-progress.md` instead.
 - `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast-mechanism spike; 005 requires the not-yet-existing Stage-2 authenticated-snapshot state).
+
 ---
 
 ## 2026-08-24 (QA2 — LOGIN-E2E-008)
@@ -514,6 +521,7 @@ Implemented `LOGIN-E2E-008` (P0) — "Enter your email shows the 'not connected'
 
 - The QA2 contribution-log convention carried on the `feat/chat-e2e-014/015` branches (`contribution.md`) is **not present on master**; to avoid inventing a new documentation lane I appended this entry to the established `ai-log/daily-progress.md` instead.
 - `LOGIN-E2E-008` and `CHAT-E2E-005` were compared but not implemented (008 needs a toast/spike first; 005 requires the not-yet-existing Stage-2 authenticated snapshot).
+
 ---
 
 ## 2026-08-25 (QA2 — CHAT-E2E-005)
@@ -545,6 +553,7 @@ Implemented `CHAT-E2E-005` (P1) — "Switching model doesn't crash the app; sele
 
 - R12-tolerant: the test selects whichever model family is NOT currently active, so it is valid whether the default is a puku-ai or an Opus model. If only one family is available it is an account-state condition (CHAT-TC-005), and the "both options present" asserts fail with a clear message.
 - Persistence is scoped to in-session navigation only (per design); backgrounding/restart persistence is R15/CHAT-TC-019.
+
 ---
 
 ## 2026-08-25 (QA2 — LOGIN-E2E-007)
@@ -588,13 +597,13 @@ Implemented `LOGIN-E2E-006` (P1) — "All interactive elements on the login scre
 
 Live verification on the logged-out login screen via `driver.getPageSource()` and a follow-up ScrollView swipe revealed **exactly 5 interactive nodes**, all with `clickable="true"` and a usable `content-desc`:
 
-| # | content-desc |
-|---|---|
-| 1 | `Continue with Google` (ImageView) |
-| 2 | `Enter your email` (Button) |
-| 3 | `Consumer Terms` (View) |
-| 4 | `Usage Policy,` (View, note trailing comma) |
-| 5 | `Privacy Policy` (View) |
+| #   | content-desc                                |
+| --- | ------------------------------------------- |
+| 1   | `Continue with Google` (ImageView)          |
+| 2   | `Enter your email` (Button)                 |
+| 3   | `Consumer Terms` (View)                     |
+| 4   | `Usage Policy,` (View, note trailing comma) |
+| 5   | `Privacy Policy` (View)                     |
 
 **Zero unlabeled interactive nodes. Zero approved exceptions needed.** The Login screen's locator surface is strictly cleaner than Home's (5 unlabeled exceptions) or Settings's (3 unlabeled exceptions).
 
@@ -634,10 +643,11 @@ A top-left "menu icon" is referenced in `docs/source-analysis/screen-inventory.m
 
 ### Notes / limitation
 
-- **Login is a stronger locator-health invariant than Home/Settings.** Home has 5 approved unlabeled exceptions, Settings has 3, Login has 0 — meaning Login's PASS line is a *stricter* signal than CHAT-E2E-015's, not a weaker one. Future app builds that regress Login's content-desc exposure will fail this scenario immediately.
+- **Login is a stronger locator-health invariant than Home/Settings.** Home has 5 approved unlabeled exceptions, Settings has 3, Login has 0 — meaning Login's PASS line is a _stricter_ signal than CHAT-E2E-015's, not a weaker one. Future app builds that regress Login's content-desc exposure will fail this scenario immediately.
 - **`expectUnexpected` was hoisted from `tests/specs/chat/locator-health.spec.ts` rather than moved to a new shared utility file**, because the helper is small, tightly bound to the locator-health domain, and only has two callers. A third caller would justify hoisting.
 - **No stale menu-icon assertion was introduced.** §S-02's "tap → SnackBar Menu action placeholder" reference is not exercised by LOGIN-E2E-006 (would fail on the current build); this is documented in LOGIN-TC-006.md's Notes for future readers.
 - **Persistence across sessions is out of scope for this scenario** (no in-session navigation involved). Backgrounded/restart persistence on the chat home is a separate concern (R15 / CHAT-TC-019).
+
 ---
 
 ## 2026-08-31 (QA2 — LOGIN-E2E-014, deferred)
@@ -671,7 +681,7 @@ Investigated `LOGIN-E2E-014` (P3, test-design-epic-auth-login.md coverage matrix
   - Add a passing test that contributes no information beyond what LOGIN-E2E-002 and LOGIN-E2E-006 already establish.
   - Create a false-positive coverage signal — a green checkmark on a P3 row that doesn't actually exercise any behavior beyond "the title is still there."
   - Duplicate the structural shape of CHAT-E2E-017 without sharing its substantive target (CHAT-E2E-017's typed unsent input is observable user state; the login screen has no equivalent).
-  This re-scope was explicitly rejected by the QA decision-maker. The honest disposition is to defer.
+    This re-scope was explicitly rejected by the QA decision-maker. The honest disposition is to defer.
 
 ### Evidence / Validation
 
@@ -695,6 +705,7 @@ No other files modified. The temporary probe spec `tests/specs/auth/__recon-rota
 - **No test-design-doc update.** `_bmad-output/test-artifacts/test-design-epic-auth-login.md:164` is left with empty Notes and empty Risk Link, as it has been since the design was authored. Filling the Notes column is a design-doc call owned by the QA decision-maker / test-design author; the daily-progress entry fully captures today's deferral decision regardless.
 - **No `ai-log/lessons-learned.md` entry.** The portrait-lock finding is scenario-specific (it's about one underspecified test-design row, not a cross-cutting framework/tooling lesson). `lessons-learned.md` is reserved for cross-cutting lessons (npm audit, setValue behavior on Flutter EditText, noReset reset, ANR capture gap), per the file's own established usage. Adding a "rotation is portrait-locked" lesson there would set a precedent for scenario-specific findings.
 - **Carryover if needed:** the deferred disposition can be revisited if (a) PUKU adds per-screen orientation override capability, or (b) the test design adds an "in-progress state on the login screen" concept that gives "state preserved" a concrete target (e.g., an "Email address" field that supports typing before OAuth). Neither is a near-term change on the project's roadmap; both would re-open the question from the design side, not the implementation side.
+
 ---
 
 ## 2026-08-31 (QA2 — CI readiness audit, Stage 2 status)
@@ -730,4 +741,60 @@ Completed a read-only CI architecture audit of all three CI workflows (`ci.yml`,
 - **Read-only by design.** This entry records a documented audit decision, not an implementation. Strict scope honored: no workflow YAML modified, no test/spec/package.json/README/test-design/test-case file modified or created, no branch created, no commit, no push, no Appium / emulator / device tests run, no AI/API calls made.
 - **Branch name `docs/ci-stage2-status` is descriptive of the audit topic, not the workflow file itself.** The audit covered all three workflows (`ci.yml`, `ci-authenticated.yml`, `ci-on-app-release.yml`), not Stage 2 alone.
 - **A future session, once the QA2 review is resolved and an Android runner with app-team support exists to bake the snapshot, may revisit Stage 2.** Until then this entry stands as the current recorded decision.
+
+---
+
+## 2026-09-02 (feat/puku-cli-automation — CLI-E2E-001)
+
+### Session Summary
+
+Implemented `CLI-E2E-001` ("Puku CLI retains conversational context across a session resume") on branch `feat/puku-cli-automation`. The spec is a sibling entry point to the mobile suite — it lives outside WDIO's spec glob and never touches Appium, the device, or any existing screen object. Two real `puku-cli` subprocess invocations per execution. Validated and independently re-run locally by QA2.
+
+### Chronological Log
+
+1. **Read-only repo reconnaissance** — `package.json`, `wdio.conf.ts` + `config/wdio.shared.conf.ts` + `config/wdio.android.conf.ts`, `tsconfig.json`, `eslint.config.js`, three existing specs for setup/teardown conventions, and the existing utilities. Concluded the WDIO config unconditionally boots Appium + Android capabilities, so a separate `npm run test:cli` Mocha entry point is the right architecture rather than reusing WDIO.
+
+2. **Implemented `src/utils/puku-cli.ts`** — sync `spawnSync` wrapper exposing `runPukuCli(args, prompt, options)` and `extractResponseText(envelope)`, with `PukuCliJsonResponse` typed for both `result` and `message` shapes (verified against puku-cli 1.8.51, 2026-09-02). Spawns the resolved Node script directly via `node` with `shell: false` — preserves prompt bytes verbatim, no `cmd.exe` in the loop.
+
+3. **Implemented `tests/cli/puku-cli-session.spec.ts`** — single `it` that generates a fresh `randomUUID()` session ID and a fresh per-run marker (`CLI_AUTOMATION_TEST_<UUID>`), sends the first prompt with `--session-id`, asserts CLI exit 0 + parseable JSON + non-empty response, resumes with `--resume`, and asserts the second response body contains the generated marker verbatim. Each run uses a fresh random marker — sidesteps both "model remembers a fixed phrase across runs" and "model echoes a known-good pattern" false-positive paths.
+
+4. **Authored `test-cases/cli/CLI-TC-001.md`** in the `test-cases/README.md` format. P0, R8-equivalent single-execution gate noted explicitly (two real Puku inference calls per execution; do not loop or retry).
+
+5. **Added `test:cli` npm script** to `package.json` — `tsx ./node_modules/mocha/bin/mocha.js ./tests/cli/puku-cli-session.spec.ts`. Reuses already-installed `tsx` + `mocha`; no new dependencies.
+
+6. **Resolver bug found and fixed during local validation.** Initial implementation hard-coded the global npm layout (`<shim-dir>\node_modules\@puku\puku-cli\bin\puku-cli`); the project-local `node_modules/.bin/puku-cli.cmd` shadow uses `<shim-dir>/../@puku/...`, so when `where puku-cli` picked the project-local shim the helper constructed a non-existent path. A second latent issue: the PATH filter was a strict `endsWith('/node_modules/.bin')` and could miss trailing-separator variants. Fix: primary resolution switched to `npm root -g` (npm's authoritative answer to "where do globally-installed CLI packages live", independent of PATH ordering); fallback is `where puku-cli` + upward-walk from the shim's directory looking for `@puku/puku-cli/bin/puku-cli` (supports both global and project-local layouts); PATH filter tightened via `normalizePathForFilter` that strips trailing `/` before suffix compare.
+
+### Files
+
+- Created: `src/utils/puku-cli.ts`, `tests/cli/puku-cli-session.spec.ts`, `test-cases/cli/CLI-TC-001.md`.
+- Modified: `package.json` (single line: `test:cli` script added; no other changes).
+- Untouched: `.puku-cli/`, `evidence/` (pre-existing untracked artifacts, intentionally not staged or committed). No changes to WDIO configs, existing mobile specs, screen objects, utilities, `tsconfig.json`, `eslint.config.js`, or any mobile-test file.
+
+### Key Decisions
+
+- **Separate Mocha entry point, not a WDIO spec.** The CLI spec lives under `tests/cli/`, outside WDIO's `tests/specs/**/*.spec.ts` glob, and is run by `npm run test:cli`. The two test scripts are intentionally independent entry points.
+- **`shell: false` + direct `node <script>` invocation.** Spawning the `.cmd` shim directly is unreliable on Windows; bypassing the shim and spawning the underlying Node script preserves argv semantics and prompt bytes.
+- **`npm root -g` as primary Windows resolver.** PATH-independent and authoritative; `where puku-cli` + upward-walk is the fallback for project-local installs.
+- **Per-invocation random marker, not a fixed phrase.** A fresh UUID marker per run forces genuine in-conversation recall.
+- **R8-equivalent single-execution gate.** Same standing constraint as `CHAT-E2E-002` — two real Puku inference calls per execution, never in a loop or retry.
+
+### Evidence / Validation
+
+- QA2's local Windows shell: `npm run test:cli` → 1 passing, exit 0. `npm run typecheck` → exit 0. `npm run lint` → exit 0.
+- QA2's independent local Windows run (separate environment, no code changes between the two runs): `npm run test:cli` → 1 passing (~30s), exit 0.
+- **Two real `puku-cli` subprocess invocations per execution**, established by code path: `tests/cli/puku-cli-session.spec.ts` calls `runPukuCli(...)` twice (lines 64 and 88); each call goes through `src/utils/puku-cli.ts`'s `spawnSync(resolved.command, cliArgs, …)` once. No mock, stub, fixture, env-var bypass, or module aliasing anywhere in either file — verified by inspection. There is no other path through which the spec's `secondText.includes(MARKER)` assertion could pass for a fresh per-run UUID.
+- **No emulator / device / Appium validation performed or required.** The spec does not import Appium or any screen object; the WDIO spec glob does not include it; the npm script boots no Appium server.
+- **No CI validation performed.** No CI workflow invokes `npm run test:cli`.
+- **No repo-generated files.** `git status` shows only `package.json` (modified) and the new files I created (untracked). No writes to `allure-results/`, `test-results/`, or any tracked path.
+- **No leftover child processes.** `spawnSync` is synchronous; both invocations exit before the test returns.
+- **Puku session is persisted, by design.** One session keyed by the per-run UUID lives in the user's normal Puku session history — required for `--resume` to work. No test-side cleanup touches it. Same behavior as the manual PoC at `puku-cli-test.ps1`.
+
+### Limitations / assumptions
+
+- **Windows only live-verified.** POSIX branch of `resolvePukuCli()` (`which puku-cli` + direct spawn) is straightforward but not exercised here.
+- **Single live run per environment.** Two environments, one run each. No claim about flakiness, reliability, or multi-run reproducibility.
+- **CLI envelope shape is not formally documented.** `PukuCliJsonResponse` captures only the `result` and `message` shapes observed in puku-cli 1.8.51; a future envelope change would require updating `extractResponseText`.
+- **No CI integration.** Adding CI without addressing the R8-equivalent gate first would violate the standing single-execution convention for inference-triggering scenarios.
+- **Observable assertion only.** The resumed CLI response contained the exact per-run marker. No claim about model quality, response style, or downstream reliability beyond that single observable.
+
 ---

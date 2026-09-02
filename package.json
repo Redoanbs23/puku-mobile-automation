@@ -11,6 +11,7 @@
     "test": "wdio run wdio.conf.ts",
     "test:p0": "wdio run wdio.conf.ts --mochaOpts.grep=@p0",
     "test:p1": "wdio run wdio.conf.ts --mochaOpts.grep=@p1",
+    "test:cli": "tsx ./node_modules/mocha/bin/mocha.js ./tests/cli/puku-cli-session.spec.ts",
     "report:allure:generate": "allure generate allure-results --clean -o allure-report",
     "report:allure:open": "allure open allure-report",
     "lint": "eslint .",
