@@ -38,3 +38,7 @@ build/
 .bmad-loop/cache/
 .bmad-loop/policy.toml
 _bmad/render/
+
+# puku CLI runtime state (Android UIAutomator dumps, PR cache, settings.local).
+# Pre-existing local-only artifacts; never intended to be committed.
+.puku-cli/

@@ -46,6 +46,7 @@ export default [
       '_bmad-output',
       'design-artifacts',
       'apk',
+      'evidence',
     ],
   },
 ];

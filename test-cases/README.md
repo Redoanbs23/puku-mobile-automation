@@ -53,3 +53,5 @@ Not Run | Pass | Fail | Blocked
 ## Current scope
 
 14 manual test cases correspond 1:1 to the scenarios in `test-design-epic-auth-login.md`'s coverage matrix (`LOGIN-TC-001` through `LOGIN-TC-014`, in `auth/`). Individual case files are not written yet — this README and the folder structure are scaffolded first; cases will be added as they're executed or as their automated counterparts are built.
+
+The `cli/` folder holds the manual counterpart to the CLI ConPTY suite (`tests/specs/cli/`). It uses the same `E2E` ↔ `TC` traceability convention (e.g. `CLI-E2E-001` ↔ `CLI-TC-001`). The CLI lane is **deliberately separate** from the Android suite because it does not require Appium, an Android device, or a mobile-app session — see `cli/CLI-TC-001.md` for the rationale and `docs/running-tests.md` for the `npm run test:cli` invocation.

@@ -1,0 +1,8 @@
+{
+  "require": ["dotenv/config", "tsx"],
+  "extensions": ["ts"],
+  "timeout": 180000,
+  "ui": "bdd",
+  "reporter": "spec",
+  "reporter-option": ["output", "test-results/cli-mocha.txt"]
+}

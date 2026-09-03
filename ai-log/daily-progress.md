@@ -730,4 +730,79 @@ Completed a read-only CI architecture audit of all three CI workflows (`ci.yml`,
 - **Read-only by design.** This entry records a documented audit decision, not an implementation. Strict scope honored: no workflow YAML modified, no test/spec/package.json/README/test-design/test-case file modified or created, no branch created, no commit, no push, no Appium / emulator / device tests run, no AI/API calls made.
 - **Branch name `docs/ci-stage2-status` is descriptive of the audit topic, not the workflow file itself.** The audit covered all three workflows (`ci.yml`, `ci-authenticated.yml`, `ci-on-app-release.yml`), not Stage 2 alone.
 - **A future session, once the QA2 review is resolved and an Android runner with app-team support exists to bake the snapshot, may revisit Stage 2.** Until then this entry stands as the current recorded decision.
+
 ---
+
+## 2026-09-03 (Day 15 — CLI-only automation, post-Day-14 reset)
+
+### Session Summary
+
+Confirmed the user-requested CLI-only automation scope (Windows ConPTY → real interactive puku-cli → `/remote-control` → real session → chat input), then implemented the smallest maintainable test that proves the workflow end-to-end. After the Day 14 attempt (`puku-cli -p` + a synchronous wrapper + a Day 14 spec called `CLI-E2E-001`) was deleted for automating the wrong surface, today's work rebuilds the same scenario ID against the correct one: the actual Ink/React REPL rendered through a Windows pseudo-terminal. No mobile pairing, no QR scanning, no Android toolchain — the assertion is "real interactive puku-cli can be driven through ConPTY to create a session and the `❯ ` text-input accepts input," which is exactly what the developer asked for.
+
+### Chronological Log
+
+1. **Repository reconnaissance** — read `package.json`, `wdio.conf.ts`, `config/wdio.{shared,android}.conf.ts`, `tsconfig.json`, `eslint.config.js`, the existing `tests/specs/`, `test-cases/` structure, several representative specs (CHAT-E2E-001, CHAT-E2E-002) and their manual counterparts, `src/utils/env.ts`, `src/utils/logger.ts`, `src/hooks/failure-capture.ts`, and the existing `node-pty`-bearing scripts in `F:/puku-experiment/` outside this repo. Identified the established convention: WebdriverIO 9 + Mocha ESM + TypeScript strict, `tests/specs/<lane>/*.spec.ts`, `src/utils/`, screen-object pattern over `src/screens/`, evidence files named `evidence/<scenario-id>-<…>.txt`, daily-progress entries appended to `ai-log/daily-progress.md`. Read `.env`, `.env.example`, `.gitignore` — confirmed `.env` is gitignored and contains the project's existing pattern for credential-bearing local config.
+
+2. **First attempt — WebdriverIO + ConPTY, rejected** — initially added `node-pty` as a devDep, created `src/utils/puku-cli-pty.ts` (a typed ConPTY wrapper around the installed puku-cli), `tests/specs/cli/puku-cli-remote-control.spec.ts` (the spec), and `wdio.cli.conf.ts` (a parallel wdio config without Appium). Goal: keep the WebdriverIO runner for the CLI lane too. Two problems surfaced immediately. First, WebdriverIO insists on a `capabilities` entry with a real `browserName` and would not accept arbitrary values — required `browserName: 'chrome'`, which made wdio launch an actual Chrome session every time `npm run test:cli` ran. Second, wdio's pre-flight validated `capabilities` with no opt-out, so the only escape from a Chrome launch was to drop the launcher altogether. **Decision:** switch to Mocha, which is already in `node_modules` (transitive of `@wdio/mocha-framework`) and provides the same BDD primitives (`describe`/`it`/`before`/`afterEach`) without the Appium/browser dependency. Removed `wdio.cli.conf.ts` and updated the `test:cli` script to `mocha --config .mocharc.cli.json …`. `mocha` promoted to a direct devDep; `.mocharc.cli.json` added with `require: ['dotenv/config', 'tsx']` so `.env` loads and TS compiles inline. **Critically: no Chrome session is launched anymore.**
+
+3. **First PATH-related failure** — `.env` had `PUKU_CLI_PATH="C:\\Users\\<username>\\AppData\\Roaming\\npm\\puku-cli.cmd"` (double-quoted, escaped backslashes). WDIO/the loader passed the value through a re-parser that turned `\U` into a Unicode character and turned `\n`/`\p` into literal newlines, so `process.env.PUKU_CLI_PATH` actually arrived as `C:\\Users\\<username>\\AppData\\Roaming\` + newline + `pm\\puku-cli.cmd`, and node-pty correctly refused to spawn a file with embedded newlines. **Fix:** use forward slashes, no quotes (`PUKU_CLI_PATH=C:/Users/<username>/AppData/Roaming/npm/puku-cli.cmd`). node-pty on Windows accepts forward-slash paths via ConPTY.
+
+4. **Second failure — readiness-heuristic too narrow** — initial `homeReady` required `Opus|puku-ai` AND a literal `❯ /remote-control` text in the buffer. On first boot the composer renders empty (`❯ `), so the heuristic timed out. **Fix:** anchor on the model line + a `Chat: <n> / 40000` token-counter line; both are unconditionally rendered by puku-cli once the home screen is up.
+
+5. **Third failure — `remoteReady` false-negative due to stale frame replay** — the status line first shows `• /rc connecting` (worker WS handshaking) and later flips to `• /rc` (no suffix). Ink replays frames in-place, so the `connecting` substring remains in the cumulative PTY buffer even after the connected re-render arrives — a buffer-wide regex `!/•\s*\/rc\s+connecting/` therefore returns `false` forever. **Fix:** inspect only the trailing 2 KB of the buffer (where Ink writes its most recent re-render) and grab the *last* `• /rc[^\n]*` token; connected iff that last token is NOT `connecting`. Confirmed by re-running twice — the test now reaches the connected state within ~5 s of `WaitForRemoteReady` resolving.
+
+6. **Implemented the wrapper + spec** — `src/utils/puku-cli-pty.ts` is the only place that talks to `node-pty`. It exposes a typed class (`PukuCliPty`) with `sessionId` getter, `homeReady`/`remoteReady` getters, `getSanitizedBuffer()` for evidence, `waitForHomeReady(timeoutMs)` / `waitForRemoteReady(timeoutMs)` resolvers, `write()` to drive keystrokes, and `kill()` for teardown. **Credential safety:** the wrapper refuses to forward `PUKU_{ACCESS,REFRESH,WORKER,MOBILE,API}_TOKEN` env vars; it only sets `FORCE_COLOR=1` and `PUKU_CLI_DISABLE_HEAP_RELAUNCH=1`. `sanitizeForLog()` replaces any Bearer/Authorization header AND any `[A-Za-z0-9_=-]{24,}` token shape with `[redacted-token]` before any evidence is written. The spec (`tests/specs/cli/puku-cli-remote-control.spec.ts`) skips itself cleanly when `PUKU_CLI_PATH` is unset (mirroring the project's `DEVICE_UDID` skip pattern on the Android lane) and when `PUKU_CLI_E2E=skip`.
+
+7. **Spec design** — `before()` skip; `afterEach()` always: snapshot `ptyHandle.getBuffer()` for evidence, then `ptyHandle.kill()` so no orphaned puku-cli holds an open relay session; finally `writeEvidence(...)` writes the sanitized buffer to `evidence/cli-e2e-001-<ts>.txt`. The case itself types `/remote-control\r`, awaits `remoteReady`, asserts the parsed sessionId matches the UUID regex, types the convention-compliant prompt `[PUKU-QA-TEST:CLI-E2E-001] ping\r` (per `docs/testing/test-message-convention.md`, R14), then polls the sanitized buffer for up to 60 s for that prompt string to be echoed. **Exactly one real model inference, no retries, R8 single-shot gate respected.** We deliberately do NOT assert on the AI reply text itself (R9, non-deterministic).
+
+8. **Manual test-case authored** — `test-cases/cli/CLI-TC-001.md` follows the existing template (Preconditions, Steps, Expected Result, Status=Pass, Notes) and explicitly documents the scope boundary (no mobile pairing / no QR / no mobile WS / no popup sub-flow), the rationale for choosing Mocha over WebdriverIO, and what the test asserts vs. what it explicitly does NOT assert. `test-cases/README.md` updated to mention the new `cli/` folder and the same `E2E` ↔ `TC` traceability convention.
+
+9. **Validated end-to-end** — three gates:
+   - `npm run typecheck` → PASS (no output, exit 0). Persisted to `evidence/cli001-typecheck.txt`.
+   - `npm run lint` → PASS (no output, exit 0). Persisted to `evidence/cli001-lint.txt`.
+   - `npm run test:cli` → `1 passing (~21 s)`. The `❯ [PUKU-QA-TEST:CLI-E2E-001] ping` echo + `⠋ Undulating…` spinner in the PTY buffer confirm the composer accepted the submission. Persisted to `evidence/cli001-run.txt`.
+   - Re-ran `npm run test:cli` twice (back-to-back) — both runs pass; no leftover puku-cli processes in `tasklist`.
+
+10. **Credential-leak scan** — `grep -E "Bearer|Authorization|sk-|pk-oat|pk-lrot|pk-owt"` over the entire `evidence/` directory returned zero hits; the sessionId in the URL is sanitized to `[redacted-token]` in the written evidence file.
+
+### Findings / Decisions
+
+- **WebdriverIO is the wrong runner for the CLI lane.** It forces a Chrome session open. Mocha alone gives us the same BDD surface with no browser dependency. Separate lane, separate runner, dedicated `--config .mocharc.cli.json` keeps `test:cli` completely orthogonal to `test`.
+- **The puku-cli launcher path lives in `.env`, not source.** `.env` is gitignored per the project's existing convention; `.env.example` documents the new `PUKU_CLI_PATH` variable. Hardcoding would have leaked a personal file layout into tracked code and broken CI. The spec skips itself cleanly when the var is unset — same `this.skip()` pattern the Android suite uses for `DEVICE_UDID`.
+- **`• /rc connecting` is a deliberate transient state** during the worker WebSocket handshake. Buffer-wide regex was the wrong tool — Ink frame replay keeps the substring alive. Trailing-window + last-token anchoring is the correct fix and is now wrapped in `PukuCliPty.waitForRemoteReady()`.
+- **No native compilation required for the CLI lane.** `node-pty@1.1.0` (Microsoft-maintained) ships Win32 ConPTY prebuilds at `node_modules/node-pty/prebuilds/win32-x64/{conpty,pty}.node`. The `node-pty` install script can be skipped (`npm install --ignore-scripts`) when prebuilds are sufficient — confirmed working.
+- **The `/remote-control` popup is session-management, not the chat composer.** This was reconfirmed inline: the spec only types into the `❯ ` composer (rendered AT the home screen, not inside the popup), and the prompt echoes our submission back into the buffer within a few hundred ms. The popup's `Disconnect`/`Show QR`/`Continue` options remain for human-driven teardown if the operator ever wants to manually close a session — they are not exercised by automation.
+
+### Files Changed
+
+- `package.json` — added `node-pty@^1.1.0` and `mocha@^10.4.0` devDeps; added `test:cli` script.
+- `tsconfig.json` — no change (CLI spec lives under existing `tests/**/*.ts`).
+- `eslint.config.js` — `evidence/` added to the ignores list (was missing; now matches the project's pattern).
+- `.env.example` — added documented `PUKU_CLI_PATH` section.
+- `.env` (local-only, gitignored) — added `PUKU_CLI_PATH=C:/Users/<username>/AppData/Roaming/npm/puku-cli.cmd`.
+- `.mocharc.cli.json` (new) — Mocha config for the CLI lane: `dotenv/config`, `tsx`, 180 s timeout.
+- `src/utils/puku-cli-pty.ts` (new) — minimal Windows ConPTY wrapper around the real puku-cli; the only place that talks to `node-pty`. Includes the `resolvePukuCliPath` helper that points users at `.env` when unset.
+- `src/utils/env.ts` — added a typed `env.pukuCliPath()` accessor (no hardcoded defaults — undef when unset).
+- `tests/specs/cli/puku-cli-remote-control.spec.ts` (new) — `CLI-E2E-001 @p1`. Skip-clean when `PUKU_CLI_PATH` unset; one real inference per invocation; sanitized evidence on every exit path.
+- `test-cases/cli/CLI-TC-001.md` (new) — manual counterpart. Status: Pass.
+- `test-cases/README.md` — extended the "Current scope" section to mention the new `cli/` lane.
+- `evidence/cli001-{run,typecheck,lint}.txt` — clean validation output snapshots (untracked, by repo convention).
+- `evidence/cli-e2e-001-<ts>.txt` — sanitized PTY buffer captured per run (untracked, by repo convention).
+
+### Validation Results (local, no emulator / no device)
+
+| Gate | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | exit 0, no output |
+| Lint | `npm run lint` | exit 0, no output |
+| CLI suite | `npm run test:cli` | `1 passing (~21 s)` |
+| Repeatability | second `npm run test:cli` | `1 passing (~20 s)`, no flake |
+| Process cleanup | `tasklist` post-run | no orphan `puku-cli.exe` |
+
+### Notes / Limitations
+
+- **Windows-only ConPTY validated.** The wrapper uses `useConpty: true` and the readiness regex matches `Opus|puku-ai` and the `Chat:` token counter — both Ink-rendered lines specific to puku-cli 1.8.x. macOS/Linux would need `useConpty: false` (auto-detect PTY vs ConPTY) and the readiness heuristic to be re-validated against a POSIX rendering of the same prompt. Out of scope today; flagged for a future contributor on a non-Windows host.
+- **One real inference per invocation, R8-honored.** The submitted prompt is convention-compliant (`[PUKU-QA-TEST:CLI-E2E-001]` prefix). This is a real message to puku-cli's live AI backend; do NOT wire `npm run test:cli` into a burn-in / retry / high-frequency schedule.
+- **No browser-based flakiness introduced.** Because we don't open Chrome, the test no longer depends on the WebDriver session lifecycle and is robust to Chrome version mismatches.
+- **CI consideration.** A future CI lane would need to: (a) bake the npm prefix into the runner image, (b) export `PUKU_CLI_PATH` as a CI env var (NOT bake into `.env`), and (c) provide a pre-authenticated puku-cli session if the assertion should ever go beyond the echo check. None of this is required to run the suite locally today.
+- **Empty token-shape sanitization is conservative.** The 24-char `[redacted-token]` filter replaces the URL-embedded sessionId UUID before writing evidence. The wrapper exposes `getBuffer()` (raw, for diagnostics) AND `getSanitizedBuffer()` (sanitized, for evidence); the spec deliberately uses the sanitized variant for the echo check too, so even the in-test assertion never depends on UUID-shaped strings.
